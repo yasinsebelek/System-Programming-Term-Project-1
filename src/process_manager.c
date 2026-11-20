@@ -9,43 +9,32 @@
 
 #define SHUTDOWN_TIMEOUT 5
 
-// Stores information about all worker processes
 static Worker *workers = NULL;
 
-// Indicates whether the system is shutting down
 static int shutting_down = 0;
 
 
-/*
- * Creates a new child process and executes the worker program.
- */
 pid_t create_worker(void) {
 
-    // Flush output buffers before creating a child process
     fflush(NULL);
 
     pid_t pid = fork();
 
     if (pid < 0) {
 
-        // Fork failed
         perror("fork failed");
         return -1;
 
     } else if (pid == 0) {
 
-        // Child process
 
-        // Execute the worker program
         execl("./bin/worker", "worker", (char *)NULL);
 
-        // This code executes only if exec fails
         perror("exec failed");
         _exit(EXIT_FAILURE);
 
     } else {
 
-        // Parent process
         printf("Worker created. PID: %d\n", pid);
 
     }
@@ -54,17 +43,12 @@ pid_t create_worker(void) {
 }
 
 
-/*
- * Allocates memory and starts all worker processes.
- */
 void start_workers(void) {
 
-    // Prevent starting workers more than once
     if (workers != NULL) {
         return;
     }
 
-    // Allocate memory for workers
     workers = malloc(sizeof(Worker) * WORKER_COUNT);
 
     if (workers == NULL) {
@@ -72,7 +56,6 @@ void start_workers(void) {
         return;
     }
 
-    // Initialize all worker structures
     for (int i = 0; i < WORKER_COUNT; i++) {
 
         workers[i].pid = -1;
@@ -80,7 +63,6 @@ void start_workers(void) {
         workers[i].status = WORKER_STOPPED;
     }
 
-    // Create all worker processes
     for (int i = 0; i < WORKER_COUNT; i++) {
 
         workers[i].pid = create_worker();
@@ -99,12 +81,8 @@ void start_workers(void) {
 }
 
 
-/*
- * Restarts a terminated worker if the restart limit has not been reached.
- */
 void restart_worker(Worker *worker) {
 
-    // Check whether the maximum restart limit has been reached
     if (worker->restart_count >= MAX_RESTARTS) {
 
         printf("Worker reached maximum restart limit.\n");
@@ -115,19 +93,15 @@ void restart_worker(Worker *worker) {
         return;
     }
 
-    // Update worker status
     worker->status = WORKER_RESTARTING;
 
-    // Increase restart counter
     worker->restart_count++;
 
     printf("Restarting worker... Attempt: %d/%d\n",
            worker->restart_count, MAX_RESTARTS);
 
-    // Create a new worker process
     worker->pid = create_worker();
 
-    // Check whether the new worker was created successfully
     if (worker->pid > 0) {
 
         worker->status = WORKER_RUNNING;
@@ -144,13 +118,8 @@ void restart_worker(Worker *worker) {
 }
 
 
-/*
- * Checks whether any child process has terminated.
- * Restarts workers that terminate unexpectedly.
- */
 void check_children(void) {
 
-    // Make sure worker memory has been allocated
     if (workers == NULL || shutting_down) {
         return;
     }
@@ -158,20 +127,16 @@ void check_children(void) {
     int status;
     pid_t pid;
 
-    // Check for terminated child processes without blocking
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
 
-        // Find the worker that terminated
         for (int i = 0; i < WORKER_COUNT; i++) {
 
             if (workers[i].pid == pid) {
 
                 printf("Worker %d (PID: %d) terminated.\n", i, pid);
 
-                // Clear the old PID
                 workers[i].pid = -1;
 
-                // Check whether the worker exited normally
                 if (WIFEXITED(status)) {
 
                     int exit_code = WEXITSTATUS(status);
@@ -190,7 +155,6 @@ void check_children(void) {
                         restart_worker(&workers[i]);
                     }
 
-                // Check whether the worker was terminated by a signal
                 } else if (WIFSIGNALED(status)) {
 
                     printf("Worker terminated by signal: %d\n",
@@ -204,30 +168,22 @@ void check_children(void) {
         }
     }
 
-    // Handle waitpid errors
     if (pid == -1 && errno != ECHILD && errno != EINTR) {
         perror("waitpid failed");
     }
 }
 
 
-/*
- * Stops all running workers gracefully.
- * Sends SIGTERM first and SIGKILL if the timeout expires.
- */
 void stop_workers(void) {
 
-    // Prevent restarting workers during shutdown
     shutting_down = 1;
 
-    // Check whether worker memory exists
     if (workers == NULL) {
         return;
     }
 
     printf("Stopping all workers...\n");
 
-    // Send SIGTERM to all running workers
     for (int i = 0; i < WORKER_COUNT; i++) {
 
         if (workers[i].pid > 0) {
@@ -241,7 +197,6 @@ void stop_workers(void) {
         }
     }
 
-    // Wait for workers to terminate gracefully
     for (int attempt = 0; attempt < SHUTDOWN_TIMEOUT; attempt++) {
 
         int running_workers = 0;
@@ -282,7 +237,6 @@ void stop_workers(void) {
             }
         }
 
-        // All workers have terminated
         if (running_workers == 0) {
             break;
         }
@@ -290,7 +244,6 @@ void stop_workers(void) {
         sleep(1);
     }
 
-    // Forcefully terminate workers that did not stop
     for (int i = 0; i < WORKER_COUNT; i++) {
 
         if (workers[i].pid > 0) {
@@ -305,7 +258,6 @@ void stop_workers(void) {
             int status;
             pid_t result;
 
-            // Collect the terminated child process
             do {
                 result = waitpid(workers[i].pid, &status, 0);
             } while (result == -1 && errno == EINTR);
@@ -315,7 +267,6 @@ void stop_workers(void) {
         }
     }
 
-    // Release dynamically allocated memory
     free(workers);
     workers = NULL;
 
