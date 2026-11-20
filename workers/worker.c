@@ -2,26 +2,30 @@
 #include <unistd.h>
 #include <stdlib.h>
 
-int main() {
+int main(void) {
 
     pid_t pid = getpid();
     pid_t ppid = getppid();
 
-    printf("================================\n");
-    printf("       Worker Process Started   \n");
-    printf("================================\n");
+    printf("\n");
+    printf("+--------------------------------------+\n");
+    printf("|          WORKER PROCESS              |\n");
+    printf("+--------------------------------------+\n");
+    printf("| Status     : STARTED                 |\n");
+    printf("| Worker PID : %-22d |\n", pid);
+    printf("| Parent PID : %-22d |\n", ppid);
+    printf("+--------------------------------------+\n");
 
-    printf("Worker PID: %d\n", pid);
-    printf("Parent PID: %d\n", ppid);
+    fflush(stdout);
 
     while (1) {
+
         sleep(3);
 
-        printf("Worker (%d) is running...\n", pid);
-	//çıktıyı hemen gönderir
-        fflush(stdout);
+        printf("[WORKER %d] Status: RUNNING\n", pid);
 
+        fflush(stdout);
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }
