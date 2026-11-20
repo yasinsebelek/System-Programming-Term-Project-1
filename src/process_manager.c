@@ -92,7 +92,7 @@ void restart_worker(Worker *worker) {
 
         return;
     }
-
+// her denemede artırıyoruz ki sonsuz bir döngüye girmesin başarılı sonuçta count  artırsaydık başarılı olna kadar denerdi 
     worker->status = WORKER_RESTARTING;
 
     worker->restart_count++;
@@ -127,49 +127,69 @@ void check_children(void) {
     int status;
     pid_t pid;
 
-    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+    while (1) {
 
-        for (int i = 0; i < WORKER_COUNT; i++) {
+        pid = waitpid(-1, &status, WNOHANG);
 
-            if (workers[i].pid == pid) {
+        if (pid > 0) {
 
-                printf("Worker %d (PID: %d) terminated.\n", i, pid);
+            for (int i = 0; i < WORKER_COUNT; i++) {
 
-                workers[i].pid = -1;
+                if (workers[i].pid == pid) {
 
-                if (WIFEXITED(status)) {
+                    printf("Worker %d (PID: %d) terminated.\n", i, pid);
 
-                    int exit_code = WEXITSTATUS(status);
+                    workers[i].pid = -1;
 
-                    if (exit_code == 0) {
+                    if (WIFEXITED(status)) {
 
-                        printf("Worker exited normally.\n");
+                        int exit_code = WEXITSTATUS(status);
 
-                        workers[i].status = WORKER_STOPPED;
+                        if (exit_code == 0) {
 
-                    } else {
+                            printf("Worker exited normally.\n");
 
-                        printf("Worker exited with error. Code: %d\n",
-                               exit_code);
+                            workers[i].status = WORKER_STOPPED;
+
+                        } else {
+
+                            printf("Worker exited with error. Code: %d\n",
+                                   exit_code);
+
+                            restart_worker(&workers[i]);
+                        }
+
+                    }
+
+                    else if (WIFSIGNALED(status)) {
+
+                        int signal_number = WTERMSIG(status);
+
+                        printf("Worker terminated by signal: %d\n",
+                               signal_number);
 
                         restart_worker(&workers[i]);
                     }
 
-                } else if (WIFSIGNALED(status)) {
-
-                    printf("Worker terminated by signal: %d\n",
-                           WTERMSIG(status));
-
-                    restart_worker(&workers[i]);
+                    break;
                 }
-
-                break;
             }
         }
-    }
+        else if (pid == 0) {
+            break;
+        }
 
-    if (pid == -1 && errno != ECHILD && errno != EINTR) {
-        perror("waitpid failed");
+        else {
+            if (errno == EINTR) {
+                continue;
+            }
+            if (errno == ECHILD) {
+                break;
+            }
+
+            perror("waitpid failed");
+            break;
+        }
     }
 }
 
