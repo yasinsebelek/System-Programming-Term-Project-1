@@ -1,37 +1,31 @@
 #include "process_manager.h"
+#include "signal_manager.h"
 
 #include <stdio.h>
 #include <unistd.h>
-#include <signal.h>
-
-static volatile sig_atomic_t shutdown_requested = 0;
-
-void handle_signal(int signal_number) {
-    shutdown_requested = 1;
-}
 
 int main(void) {
 
-    struct sigaction sa = {0};
-
-    sa.sa_handler = handle_signal;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-
-    sigaction(SIGINT, &sa, NULL);
-    sigaction(SIGTERM, &sa, NULL);
+    /* Register signal handlers */
+    setup_signal_handlers();
 
     printf("Watchdog process manager started.\n");
 
+    /* Start child processes */
     start_workers();
 
+    /* Main monitoring loop */
     while (!shutdown_requested) {
 
-        check_children();
+        if (child_exited) {
+            child_exited = 0;
+            check_children();
+        }
 
         sleep(1);
     }
 
+    /* Graceful shutdown */
     printf("\nShutdown signal received.\n");
 
     stop_workers();

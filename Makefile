@@ -6,7 +6,10 @@ TARGET = bin/watchdog
 WORKER = bin/worker
 
 SRC = src/main.c \
-      src/process_manager.c 
+      src/process_manager.c \
+      src/signal_manager.c \
+      src/logger.c
+
 
 all: $(TARGET) $(WORKER)
 
