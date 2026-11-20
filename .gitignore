@@ -1,0 +1,8 @@
+# Compiled binaries
+bin/
+
+# Object files
+*.o
+
+# macOS system files
+.DS_Store
