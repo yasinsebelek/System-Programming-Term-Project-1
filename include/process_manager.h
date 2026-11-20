@@ -22,7 +22,7 @@ typedef struct {
 } Worker;
 
 // Starts all child worker processes
-void start_workers(void);
+int start_workers(void);
 
 // Creates a single child process
 pid_t create_worker(void);

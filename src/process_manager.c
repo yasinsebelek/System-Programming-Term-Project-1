@@ -16,279 +16,324 @@ static int shutting_down = 0;
 
 pid_t create_worker(void) {
 
-    fflush(NULL);
+fflush(NULL);
 
-    pid_t pid = fork();
+pid_t pid = fork();
 
-    if (pid < 0) {
+if (pid < 0) {
 
-        perror("fork failed");
-        return -1;
+    perror("[ERROR] fork failed");
+    return -1;
 
-    } else if (pid == 0) {
+} else if (pid == 0) {
+
+    execl("./bin/worker", "worker", (char *)NULL);
+
+    perror("[ERROR] exec failed");
+    _exit(EXIT_FAILURE);
+
+} else {
+
+    printf("[INFO] Child process created | PID: %d\n", pid);
+
+}
+
+return pid;
 
 
-        execl("./bin/worker", "worker", (char *)NULL);
+}
 
-        perror("exec failed");
-        _exit(EXIT_FAILURE);
+int start_workers(void) {
+
+if (workers != NULL) {
+    return 0;
+}
+
+workers = malloc(sizeof(Worker) * WORKER_COUNT);
+
+if (workers == NULL) {
+    perror("[ERROR] malloc failed");
+    return -1;
+}
+
+/* Initialize worker information */
+for (int i = 0; i < WORKER_COUNT; i++) {
+
+    workers[i].pid = -1;
+    workers[i].restart_count = 0;
+    workers[i].status = WORKER_STOPPED;
+}
+
+/* Create workers one by one */
+for (int i = 0; i < WORKER_COUNT; i++) {
+
+    workers[i].pid = create_worker();
+
+    if (workers[i].pid > 0) {
+
+        workers[i].status = WORKER_RUNNING;
+
+        printf("[SUCCESS] Worker #%d created | PID: %d\n",
+               i + 1, workers[i].pid);
 
     } else {
 
-        printf("Worker created. PID: %d\n", pid);
+        workers[i].status = WORKER_FAILED;
 
+        fprintf(stderr,
+                "\n[ERROR] Failed to create Worker #%d.\n"
+                "[WARNING] Rolling back worker startup...\n",
+                i + 1);
+
+        stop_workers();
+
+        return -1;
     }
-
-    return pid;
 }
 
+printf("\n[SUCCESS] All workers initialized successfully.\n");
 
-void start_workers(void) {
+return 0;
 
-    if (workers != NULL) {
-        return;
-    }
 
-    workers = malloc(sizeof(Worker) * WORKER_COUNT);
 
-    if (workers == NULL) {
-        perror("malloc failed");
-        return;
-    }
-
-    for (int i = 0; i < WORKER_COUNT; i++) {
-
-        workers[i].pid = -1;
-        workers[i].restart_count = 0;
-        workers[i].status = WORKER_STOPPED;
-    }
-
-    for (int i = 0; i < WORKER_COUNT; i++) {
-
-        workers[i].pid = create_worker();
-
-        if (workers[i].pid > 0) {
-
-            workers[i].status = WORKER_RUNNING;
-
-        } else {
-
-            workers[i].status = WORKER_FAILED;
-        }
-    }
-
-    printf("All workers have been started.\n");
 }
 
 
 void restart_worker(Worker *worker) {
 
-    if (worker->restart_count >= MAX_RESTARTS) {
 
-        printf("Worker reached maximum restart limit.\n");
+if (worker->restart_count >= MAX_RESTARTS) {
 
-        worker->status = WORKER_FAILED;
-        worker->pid = -1;
+    printf("[ERROR] Worker reached maximum restart limit (%d).\n",
+           MAX_RESTARTS);
 
-        return;
-    }
-// her denemede artırıyoruz ki sonsuz bir döngüye girmesin başarılı sonuçta count  artırsaydık başarılı olna kadar denerdi 
-    worker->status = WORKER_RESTARTING;
+    worker->status = WORKER_FAILED;
+    worker->pid = -1;
 
-    worker->restart_count++;
+    return;
+}
 
-    printf("Restarting worker... Attempt: %d/%d\n",
-           worker->restart_count, MAX_RESTARTS);
+worker->status = WORKER_RESTARTING;
 
-    worker->pid = create_worker();
+worker->restart_count++;
 
-    if (worker->pid > 0) {
+printf("[INFO] Restarting worker | Attempt: %d/%d\n",
+       worker->restart_count, MAX_RESTARTS);
 
-        worker->status = WORKER_RUNNING;
+worker->pid = create_worker();
 
-        printf("Worker restarted successfully. PID: %d\n",
-               worker->pid);
+if (worker->pid > 0) {
 
-    } else {
+    worker->status = WORKER_RUNNING;
 
-        worker->status = WORKER_FAILED;
+    printf("[SUCCESS] Worker restarted successfully | PID: %d\n",
+           worker->pid);
 
-        printf("Worker restart failed.\n");
-    }
+} else {
+
+    worker->status = WORKER_FAILED;
+
+    printf("[ERROR] Worker restart failed.\n");
+}
+
 }
 
 
 void check_children(void) {
 
-    if (workers == NULL || shutting_down) {
-        return;
-    }
 
-    int status;
-    pid_t pid;
+if (workers == NULL || shutting_down) {
+    return;
+}
 
-    while (1) {
+int status;
+pid_t pid;
 
-        pid = waitpid(-1, &status, WNOHANG);
+while (1) {
 
-        if (pid > 0) {
+    pid = waitpid(-1, &status, WNOHANG);
 
-            for (int i = 0; i < WORKER_COUNT; i++) {
+    if (pid > 0) {
 
-                if (workers[i].pid == pid) {
+        for (int i = 0; i < WORKER_COUNT; i++) {
 
-                    printf("Worker %d (PID: %d) terminated.\n", i, pid);
+            if (workers[i].pid == pid) {
 
-                    workers[i].pid = -1;
+                printf("\n[WARNING] Worker #%d terminated | PID: %d\n",
+                       i + 1, pid);
 
-                    if (WIFEXITED(status)) {
+                workers[i].pid = -1;
 
-                        int exit_code = WEXITSTATUS(status);
+                if (WIFEXITED(status)) {
 
-                        if (exit_code == 0) {
+                    int exit_code = WEXITSTATUS(status);
 
-                            printf("Worker exited normally.\n");
+                    if (exit_code == 0) {
 
-                            workers[i].status = WORKER_STOPPED;
+                        printf("[INFO] Worker #%d exited normally.\n",
+                               i + 1);
 
-                        } else {
+                        workers[i].status = WORKER_STOPPED;
 
-                            printf("Worker exited with error. Code: %d\n",
-                                   exit_code);
+                    } else {
 
-                            restart_worker(&workers[i]);
-                        }
-
-                    }
-
-                    else if (WIFSIGNALED(status)) {
-
-                        int signal_number = WTERMSIG(status);
-
-                        printf("Worker terminated by signal: %d\n",
-                               signal_number);
+                        printf("[ERROR] Worker #%d exited with error | Code: %d\n",
+                               i + 1, exit_code);
 
                         restart_worker(&workers[i]);
                     }
 
-                    break;
-                }
-            }
-        }
-        else if (pid == 0) {
-            break;
-        }
+                } else if (WIFSIGNALED(status)) {
 
-        else {
-            if (errno == EINTR) {
-                continue;
-            }
-            if (errno == ECHILD) {
+                    int signal_number = WTERMSIG(status);
+
+                    printf("[WARNING] Worker #%d terminated by signal: %d\n",
+                           i + 1, signal_number);
+
+                    restart_worker(&workers[i]);
+                }
+
                 break;
             }
-
-            perror("waitpid failed");
-            break;
         }
     }
+
+    else if (pid == 0) {
+        break;
+    }
+
+    else {
+
+        if (errno == EINTR) {
+            continue;
+        }
+
+        if (errno == ECHILD) {
+            break;
+        }
+
+        perror("[ERROR] waitpid failed");
+        break;
+    }
+}
+
+
+
 }
 
 
 void stop_workers(void) {
 
-    shutting_down = 1;
 
-    if (workers == NULL) {
-        return;
+shutting_down = 1;
+
+if (workers == NULL) {
+    return;
+}
+
+printf("\n[INFO] Stopping all workers...\n");
+
+/* Send SIGTERM to all running workers */
+for (int i = 0; i < WORKER_COUNT; i++) {
+
+    if (workers[i].pid > 0) {
+
+        printf("[INFO] Sending SIGTERM to Worker #%d | PID: %d\n",
+               i + 1, workers[i].pid);
+
+        if (kill(workers[i].pid, SIGTERM) == -1 && errno != ESRCH) {
+            perror("[ERROR] kill SIGTERM failed");
+        }
     }
+}
 
-    printf("Stopping all workers...\n");
+/* Wait for graceful shutdown */
+for (int attempt = 0; attempt < SHUTDOWN_TIMEOUT; attempt++) {
+
+    int running_workers = 0;
 
     for (int i = 0; i < WORKER_COUNT; i++) {
 
-        if (workers[i].pid > 0) {
-
-            printf("Sending SIGTERM to worker PID: %d\n",
-                   workers[i].pid);
-
-            if (kill(workers[i].pid, SIGTERM) == -1 && errno != ESRCH) {
-                perror("kill SIGTERM failed");
-            }
-        }
-    }
-
-    for (int attempt = 0; attempt < SHUTDOWN_TIMEOUT; attempt++) {
-
-        int running_workers = 0;
-
-        for (int i = 0; i < WORKER_COUNT; i++) {
-
-            if (workers[i].pid <= 0) {
-                continue;
-            }
-
-            int status;
-            pid_t result;
-
-            do {
-                result = waitpid(workers[i].pid, &status, WNOHANG);
-            } while (result == -1 && errno == EINTR);
-
-            if (result == workers[i].pid) {
-
-                printf("Worker PID %d stopped gracefully.\n",
-                       workers[i].pid);
-
-                workers[i].pid = -1;
-                workers[i].status = WORKER_STOPPED;
-
-            } else if (result == 0) {
-
-                running_workers++;
-
-            } else if (result == -1 && errno == ECHILD) {
-
-                workers[i].pid = -1;
-                workers[i].status = WORKER_STOPPED;
-
-            } else if (result == -1) {
-
-                perror("waitpid failed");
-            }
+        if (workers[i].pid <= 0) {
+            continue;
         }
 
-        if (running_workers == 0) {
-            break;
-        }
+        int status;
+        pid_t result;
 
-        sleep(1);
-    }
+        do {
+            result = waitpid(workers[i].pid, &status, WNOHANG);
+        } while (result == -1 && errno == EINTR);
 
-    for (int i = 0; i < WORKER_COUNT; i++) {
+        if (result == workers[i].pid) {
 
-        if (workers[i].pid > 0) {
-
-            printf("Worker PID %d did not stop. Sending SIGKILL.\n",
-                   workers[i].pid);
-
-            if (kill(workers[i].pid, SIGKILL) == -1 && errno != ESRCH) {
-                perror("kill SIGKILL failed");
-            }
-
-            int status;
-            pid_t result;
-
-            do {
-                result = waitpid(workers[i].pid, &status, 0);
-            } while (result == -1 && errno == EINTR);
+            printf("[SUCCESS] Worker #%d stopped gracefully | PID: %d\n",
+                   i + 1, workers[i].pid);
 
             workers[i].pid = -1;
             workers[i].status = WORKER_STOPPED;
+
+        } else if (result == 0) {
+
+            running_workers++;
+
+        } else if (result == -1 && errno == ECHILD) {
+
+            workers[i].pid = -1;
+            workers[i].status = WORKER_STOPPED;
+
+        } else if (result == -1) {
+
+            perror("[ERROR] waitpid failed");
         }
     }
 
-    free(workers);
-    workers = NULL;
+    if (running_workers == 0) {
+        break;
+    }
 
-    printf("All workers have been stopped.\n");
+    sleep(1);
+}
+
+/* Forcefully terminate workers that did not stop */
+for (int i = 0; i < WORKER_COUNT; i++) {
+
+    if (workers[i].pid > 0) {
+
+        printf("[WARNING] Worker #%d did not stop. Sending SIGKILL | PID: %d\n",
+               i + 1, workers[i].pid);
+
+        if (kill(workers[i].pid, SIGKILL) == -1 && errno != ESRCH) {
+            perror("[ERROR] kill SIGKILL failed");
+        }
+
+        int status;
+        pid_t result;
+
+        do {
+            result = waitpid(workers[i].pid, &status, 0);
+        } while (result == -1 && errno == EINTR);
+
+        if (result == workers[i].pid ||
+            (result == -1 && errno == ECHILD)) {
+
+            workers[i].pid = -1;
+            workers[i].status = WORKER_STOPPED;
+
+        } else if (result == -1) {
+
+            perror("[ERROR] waitpid after SIGKILL failed");
+        }
+    }
+}
+
+free(workers);
+workers = NULL;
+
+printf("[SUCCESS] All workers have been stopped.\n");
+
+
+
+
 }

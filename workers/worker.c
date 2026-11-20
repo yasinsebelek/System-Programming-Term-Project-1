@@ -4,28 +4,20 @@
 
 int main(void) {
 
-    pid_t pid = getpid();
-    pid_t ppid = getppid();
+pid_t pid = getpid();
+pid_t ppid = getppid();
 
-    printf("\n");
-    printf("+--------------------------------------+\n");
-    printf("|          WORKER PROCESS              |\n");
-    printf("+--------------------------------------+\n");
-    printf("| Status     : STARTED                 |\n");
-    printf("| Worker PID : %-22d |\n", pid);
-    printf("| Parent PID : %-22d |\n", ppid);
-    printf("+--------------------------------------+\n");
+printf("\n[WORKER STARTED] PID: %d | PARENT: %d\n", pid, ppid);
+fflush(stdout);
 
+while (1) {
+
+    sleep(3);
+
+    printf("[WORKER %d] STATUS: RUNNING\n", pid);
     fflush(stdout);
+}
 
-    while (1) {
+return EXIT_SUCCESS;
 
-        sleep(3);
-
-        printf("[WORKER %d] Status: RUNNING\n", pid);
-
-        fflush(stdout);
-    }
-
-    return EXIT_SUCCESS;
 }

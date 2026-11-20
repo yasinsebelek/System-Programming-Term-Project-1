@@ -1,36 +1,61 @@
 #include "process_manager.h"
 #include "signal_manager.h"
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 
 int main(void) {
 
-    /* Register signal handlers */
-    setup_signal_handlers();
+printf("\n");
+printf("==================================================\n");
+printf("             WATCHDOG PROCESS MANAGER             \n");
+printf("==================================================\n\n");
 
-    printf("Watchdog process manager started.\n");
+setup_signal_handlers();
 
-    /* Start child processes */
-    start_workers();
+printf("[INFO] Watchdog started.\n");
+printf("[INFO] Initializing workers...\n\n");
 
-    /* Main monitoring loop */
-    while (!shutdown_requested) {
+if (start_workers() == -1) {
 
-        if (child_exited) {
-            child_exited = 0;
-            check_children();
-        }
+    fprintf(stderr, "\n[ERROR] Watchdog startup failed.\n");
+    fprintf(stderr, "[ERROR] Application terminated.\n");
 
-        sleep(1);
+    return EXIT_FAILURE;
+}
+
+printf("\n[INFO] All workers initialized successfully.\n");
+
+printf("\n");
+printf("==================================================\n");
+printf("              WATCHDOG IS RUNNING                 \n");
+printf("==================================================\n\n");
+
+while (!shutdown_requested) {
+
+    if (child_exited) {
+        child_exited = 0;
+        check_children();
     }
 
-    /* Graceful shutdown */
-    printf("\nShutdown signal received.\n");
+    sleep(1);
+}
 
-    stop_workers();
+printf("\n");
+printf("==================================================\n");
+printf("                 SHUTTING DOWN                    \n");
+printf("==================================================\n\n");
 
-    printf("Watchdog stopped.\n");
+printf("[INFO] Shutdown signal received.\n");
 
-    return 0;
+stop_workers();
+
+printf("\n");
+printf("==================================================\n");
+printf("                WATCHDOG STOPPED                  \n");
+printf("==================================================\n\n");
+
+return EXIT_SUCCESS;
+
 }
