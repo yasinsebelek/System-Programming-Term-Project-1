@@ -1,5 +1,8 @@
 # Compiled binaries
 bin/
+# Log files
+logs/
+
 
 # Object files
 *.o
