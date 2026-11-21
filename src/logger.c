@@ -2,10 +2,19 @@
 
 #include <stdio.h>
 #include <time.h>
+#include <errno.h>
+#include <sys/stat.h>
+
+
 
 static FILE *log_file = NULL;
 
 int init_logger(void) {
+
+    if (mkdir("logs", 0755) == -1 && errno != EEXIST) {
+        perror("Failed to create logs directory");
+        return -1;
+    }
 
     log_file = fopen("logs/watchdog.log", "a");
 
