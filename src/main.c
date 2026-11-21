@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <time.h>
 
 int main(void) {
 
@@ -18,12 +19,23 @@ int main(void) {
     printf("             WATCHDOG PROCESS MANAGER             \n");
     printf("==================================================\n\n");
 
-    setup_signal_handlers();
+    if (setup_signal_handlers() == -1) {
+        fprintf(stderr, "[ERROR] Failed to install signal handlers.\n");
+        log_message("ERROR", "Failed to install signal handlers.");
+        close_logger();
+        return EXIT_FAILURE;
+    }
 
-    printf("[INFO] Watchdog started.\n");
+    pid_t watchdog_pid = getpid();
+    char startup_message[100];
+
+    snprintf(startup_message, sizeof(startup_message),
+             "Watchdog started | PID: %d", watchdog_pid);
+
+    printf("[INFO] %s\n", startup_message);
     printf("[INFO] Initializing workers...\n\n");
 
-    log_message("INFO", "Watchdog started.");
+    log_message("INFO", startup_message);
     log_message("INFO", "Initializing workers...");
 
     if (start_workers() == -1) {
@@ -38,9 +50,6 @@ int main(void) {
         return EXIT_FAILURE;
     }
 
-    printf("\n[INFO] All workers initialized successfully.\n");
-
-    
     struct itimerval timer = {0};
 
     timer.it_value.tv_sec = 5;
@@ -74,7 +83,7 @@ int main(void) {
 
         if (periodic_check_requested) {
             periodic_check_requested = 0;
-            check_children();
+            periodic_check_workers();
         }
 
         if (status_requested) {
@@ -82,10 +91,9 @@ int main(void) {
             print_worker_status();
         }
 
-        sleep(1);
+        struct timespec ts = {1, 0};
+        nanosleep(&ts, NULL);
     }
-
-    
 
     struct itimerval stop_timer = {0};
 

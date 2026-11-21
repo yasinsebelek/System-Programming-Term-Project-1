@@ -1,5 +1,6 @@
 #include "process_manager.h"
 #include "logger.h"
+#include "signal_manager.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -9,12 +10,12 @@
 #include <errno.h>
 #include <string.h>
 #include <fcntl.h>
+#include <time.h>
 
 #define SHUTDOWN_TIMEOUT 5
 
 static Worker *workers = NULL;
 static int shutting_down = 0;
-
 
 pid_t create_worker(void) {
 
@@ -36,7 +37,6 @@ pid_t create_worker(void) {
         return -1;
     }
 
-    
     int flags = fcntl(error_pipe[1], F_GETFD);
 
     if (flags == -1 ||
@@ -320,7 +320,7 @@ void restart_worker(Worker *worker, int worker_number) {
 
 void check_children(void) {
 
-    if (workers == NULL || shutting_down) {
+    if (workers == NULL || shutting_down || shutdown_requested) {
         return;
     }
 
@@ -359,8 +359,13 @@ void check_children(void) {
                             printf("[INFO] Worker #%d exited normally.\n",
                                    i + 1);
 
-                            log_message("INFO",
-                                        "Worker exited normally with exit code 0.");
+                            char normal_message[150];
+
+                            snprintf(normal_message, sizeof(normal_message),
+                                     "Worker #%d exited normally with exit code 0 | PID: %d",
+                                     i + 1, pid);
+
+                            log_message("INFO", normal_message);
 
                             workers[i].status = WORKER_STOPPED;
 
@@ -376,7 +381,11 @@ void check_children(void) {
 
                             log_message("ERROR", error_message);
 
-                            restart_worker(&workers[i], i + 1);
+                            if (!shutdown_requested && !shutting_down) {
+                                restart_worker(&workers[i], i + 1);
+                            } else {
+                                workers[i].status = WORKER_STOPPED;
+                            }
                         }
 
                     } else if (WIFSIGNALED(status)) {
@@ -393,7 +402,11 @@ void check_children(void) {
 
                         log_message("WARNING", signal_message);
 
-                        restart_worker(&workers[i], i + 1);
+                        if (!shutdown_requested && !shutting_down) {
+                            restart_worker(&workers[i], i + 1);
+                        } else {
+                            workers[i].status = WORKER_STOPPED;
+                        }
                     }
 
                     break;
@@ -428,6 +441,40 @@ void check_children(void) {
             log_message("ERROR", message);
 
             break;
+        }
+    }
+}
+
+void periodic_check_workers(void) {
+
+    if (workers == NULL || shutting_down || shutdown_requested) {
+        return;
+    }
+
+    check_children();
+
+    for (int i = 0; i < WORKER_COUNT; i++) {
+
+        if (shutting_down || shutdown_requested) {
+            break;
+        }
+
+        if (workers[i].status == WORKER_RUNNING && workers[i].pid > 0) {
+
+            if (kill(workers[i].pid, 0) == -1 && errno == ESRCH) {
+
+                char message[150];
+
+                snprintf(message, sizeof(message),
+                         "Periodic check: Worker #%d is not running | PID: %d",
+                         i + 1, workers[i].pid);
+
+                printf("[WARNING] %s\n", message);
+                log_message("WARNING", message);
+
+                workers[i].pid = -1;
+                restart_worker(&workers[i], i + 1);
+            }
         }
     }
 }
@@ -536,7 +583,8 @@ void stop_workers(void) {
             break;
         }
 
-        sleep(1);
+        struct timespec ts = {1, 0};
+        nanosleep(&ts, NULL);
     }
 
     for (int i = 0; i < WORKER_COUNT; i++) {
@@ -720,6 +768,3 @@ void print_worker_status(void) {
 
     printf("\n==================================================\n\n");
 }
-
-
-

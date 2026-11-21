@@ -38,4 +38,6 @@ void stop_workers(void);
 
 void print_worker_status(void);
 
+void periodic_check_workers(void);
+
 #endif
