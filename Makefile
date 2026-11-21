@@ -13,13 +13,17 @@ SRC = src/main.c \
 
 all: $(TARGET) $(WORKER)
 
-$(TARGET): $(SRC)
+bin:
+	mkdir -p bin
+
+$(TARGET): $(SRC) | bin
 	$(CC) $(CFLAGS) $(SRC) -o $(TARGET)
 
-$(WORKER): workers/worker.c
+$(WORKER): workers/worker.c | bin
 	$(CC) $(CFLAGS) workers/worker.c -o $(WORKER)
 
 clean:
 	rm -f $(TARGET) $(WORKER)
+	rmdir bin 2>/dev/null || true
 
 .PHONY: all clean

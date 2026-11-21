@@ -4,13 +4,11 @@
 #include <stdlib.h>
 
 
-/* Global signal flags */
 volatile sig_atomic_t child_exited = 0;
 volatile sig_atomic_t shutdown_requested = 0;
 volatile sig_atomic_t status_requested = 0;
 
 
-/* SIGCHLD handler */
 static void handle_sigchld(int signal_number) {
     (void)signal_number;
 
@@ -18,23 +16,27 @@ static void handle_sigchld(int signal_number) {
 }
 
 
-/* SIGINT handler */
 static void handle_sigint(int signal_number) {
     (void)signal_number;
 
     shutdown_requested = 1;
 }
 
-
-/* SIGTERM handler */
 static void handle_sigterm(int signal_number) {
     (void)signal_number;
 
     shutdown_requested = 1;
 }
 
+static void handle_sigusr1(int signal_number) {
+    (void)signal_number;
 
-/* Register signal handlers */
+    status_requested = 1;
+}
+
+
+
+
 void setup_signal_handlers(void) {
 
     struct sigaction signal_action = {0};
@@ -44,7 +46,6 @@ void setup_signal_handlers(void) {
     signal_action.sa_flags = SA_RESTART;
 
 
-    /* Register SIGCHLD */
     signal_action.sa_handler = handle_sigchld;
 
     if (sigaction(SIGCHLD, &signal_action, NULL) == -1) {
@@ -63,4 +64,16 @@ void setup_signal_handlers(void) {
         perror("sigaction SIGTERM");
         exit(EXIT_FAILURE);
     }
+    
+    signal_action.sa_handler = handle_sigusr1;
+
+    if (sigaction(SIGUSR1, &signal_action, NULL) == -1) {
+
+        perror("sigaction SIGUSR1");
+
+        exit(EXIT_FAILURE);
+
+    }
 }
+
+

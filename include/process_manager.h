@@ -31,9 +31,11 @@ pid_t create_worker(void);
 void check_children(void);
 
 // Restarts a worker using its address
-void restart_worker(Worker *worker);
+void restart_worker(Worker *worker, int worker_number);
 
 // Stops all running workers
 void stop_workers(void);
+
+void print_worker_status(void);
 
 #endif

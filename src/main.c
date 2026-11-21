@@ -38,6 +38,11 @@ while (!shutdown_requested) {
         child_exited = 0;
         check_children();
     }
+    
+    if (status_requested) {
+        status_requested = 0;
+        print_worker_status();
+    }
 
     sleep(1);
 }

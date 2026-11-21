@@ -100,43 +100,46 @@ return 0;
 }
 
 
-void restart_worker(Worker *worker) {
+void restart_worker(Worker *worker, int worker_number) {
 
+    if (worker->restart_count >= MAX_RESTARTS) {
 
-if (worker->restart_count >= MAX_RESTARTS) {
+        printf("\n[ERROR] Worker #%d reached maximum restart limit (%d).\n",
+               worker_number, MAX_RESTARTS);
 
-    printf("[ERROR] Worker reached maximum restart limit (%d).\n",
+        worker->status = WORKER_FAILED;
+        worker->pid = -1;
+
+        return;
+    }
+
+    worker->status = WORKER_RESTARTING;
+
+    worker->restart_count++;
+
+    printf("\n[INFO] Restarting Worker #%d | Attempt: %d/%d\n",
+           worker_number,
+           worker->restart_count,
            MAX_RESTARTS);
 
-    worker->status = WORKER_FAILED;
-    worker->pid = -1;
+    worker->pid = create_worker();
 
-    return;
-}
+    if (worker->pid > 0) {
 
-worker->status = WORKER_RESTARTING;
+        worker->status = WORKER_RUNNING;
 
-worker->restart_count++;
+        printf("[SUCCESS] Worker #%d restarted successfully.\n",
+               worker_number);
 
-printf("[INFO] Restarting worker | Attempt: %d/%d\n",
-       worker->restart_count, MAX_RESTARTS);
+        printf("[INFO] New PID: %d\n", worker->pid);
 
-worker->pid = create_worker();
+    } else {
 
-if (worker->pid > 0) {
+        worker->status = WORKER_FAILED;
 
-    worker->status = WORKER_RUNNING;
-
-    printf("[SUCCESS] Worker restarted successfully | PID: %d\n",
-           worker->pid);
-
-} else {
-
-    worker->status = WORKER_FAILED;
-
-    printf("[ERROR] Worker restart failed.\n");
-}
-
+        printf("[ERROR] Worker #%d restart failed.\n",
+               worker_number);
+    }
 }
 
 
@@ -153,7 +156,7 @@ pid_t pid;
 while (1) {
 
     pid = waitpid(-1, &status, WNOHANG);
-
+//Bir child sonlandı.
     if (pid > 0) {
 
         for (int i = 0; i < WORKER_COUNT; i++) {
@@ -180,8 +183,8 @@ while (1) {
 
                         printf("[ERROR] Worker #%d exited with error | Code: %d\n",
                                i + 1, exit_code);
-
-                        restart_worker(&workers[i]);
+								
+							restart_worker(&workers[i], i + 1);
                     }
 
                 } else if (WIFSIGNALED(status)) {
@@ -191,7 +194,7 @@ while (1) {
                     printf("[WARNING] Worker #%d terminated by signal: %d\n",
                            i + 1, signal_number);
 
-                    restart_worker(&workers[i]);
+                    restart_worker(&workers[i], i + 1);
                 }
 
                 break;
@@ -336,4 +339,57 @@ printf("[SUCCESS] All workers have been stopped.\n");
 
 
 
+}
+
+
+void print_worker_status(void) {
+
+    if (workers == NULL) {
+        printf("[WARNING] No workers have been initialized.\n");
+        return;
+    }
+
+    printf("\n");
+    printf("==================================================\n");
+    printf("                  WORKER STATUS                   \n");
+    printf("==================================================\n\n");
+
+    for (int i = 0; i < WORKER_COUNT; i++) {
+
+        const char *status;
+
+        switch (workers[i].status) {
+
+            case WORKER_RUNNING:
+                status = "RUNNING";
+                break;
+
+            case WORKER_STOPPED:
+                status = "STOPPED";
+                break;
+
+            case WORKER_RESTARTING:
+                status = "RESTARTING";
+                break;
+
+            case WORKER_FAILED:
+                status = "FAILED";
+                break;
+
+            default:
+                status = "UNKNOWN";
+                break;
+        }
+
+        printf("Worker #%d | PID: %d | STATUS: %s\n",
+               i + 1,
+               workers[i].pid,
+               status);
+
+        printf("           Restart Count: %d/%d\n",
+               workers[i].restart_count,
+               MAX_RESTARTS);
+    }
+
+    printf("\n==================================================\n\n");
 }
