@@ -441,10 +441,8 @@ void stop_workers(void) {
     }
 
     printf("\n[INFO] Stopping all workers...\n");
-
     log_message("INFO", "Stopping all workers.");
 
-    /* Send SIGTERM */
     for (int i = 0; i < WORKER_COUNT; i++) {
 
         if (workers[i].pid <= 0) {
@@ -476,7 +474,6 @@ void stop_workers(void) {
         }
     }
 
-    /* Wait for graceful shutdown */
     for (int attempt = 0; attempt < SHUTDOWN_TIMEOUT; attempt++) {
 
         int running_workers = 0;
@@ -488,7 +485,6 @@ void stop_workers(void) {
             }
 
             int status;
-
             pid_t result;
 
             do {
@@ -543,49 +539,59 @@ void stop_workers(void) {
         sleep(1);
     }
 
-    /* Forcefully terminate remaining workers */
     for (int i = 0; i < WORKER_COUNT; i++) {
 
         if (workers[i].pid <= 0) {
             continue;
         }
 
+        pid_t worker_pid = workers[i].pid;
+
         char message[150];
 
         snprintf(message, sizeof(message),
                  "Worker #%d did not stop after SIGTERM. Sending SIGKILL | PID: %d",
-                 i + 1, workers[i].pid);
+                 i + 1, worker_pid);
 
         log_message("WARNING", message);
 
-        if (kill(workers[i].pid, SIGKILL) == -1 && errno != ESRCH) {
+        int kill_result = kill(worker_pid, SIGKILL);
+        int kill_error = (kill_result == -1) ? errno : 0;
 
-            int error_code = errno;
+        if (kill_result == -1 && kill_error != ESRCH) {
 
             char error_message[150];
 
             snprintf(error_message, sizeof(error_message),
                      "Failed to send SIGKILL to Worker #%d | Error: %d",
-                     i + 1, error_code);
+                     i + 1, kill_error);
 
             log_message("ERROR", error_message);
         }
 
         int status;
-
         pid_t result;
 
-        do {
-            result = waitpid(workers[i].pid, &status, 0);
-        } while (result == -1 && errno == EINTR);
+        if (kill_result == 0) {
 
-        if (result == workers[i].pid) {
+            do {
+                result = waitpid(worker_pid, &status, 0);
+            } while (result == -1 && errno == EINTR);
+
+        } else {
+
+            do {
+                result = waitpid(worker_pid, &status, WNOHANG);
+            } while (result == -1 && errno == EINTR);
+        }
+
+        if (result == worker_pid) {
 
             char success_message[150];
 
             snprintf(success_message, sizeof(success_message),
-                     "Worker #%d terminated and reaped after SIGKILL | PID: %d",
-                     i + 1, workers[i].pid);
+                     "Worker #%d terminated and reaped | PID: %d",
+                     i + 1, worker_pid);
 
             log_message("SUCCESS", success_message);
 
@@ -595,10 +601,15 @@ void stop_workers(void) {
         } else if (result == -1 && errno == ECHILD) {
 
             log_message("WARNING",
-                        "Worker is no longer waitable after SIGKILL.");
+                        "Worker is no longer waitable.");
 
             workers[i].pid = -1;
             workers[i].status = WORKER_STOPPED;
+
+        } else if (result == 0) {
+
+            log_message("ERROR",
+                        "Worker is still running. Could not confirm termination.");
 
         } else if (result == -1) {
 
@@ -614,12 +625,29 @@ void stop_workers(void) {
         }
     }
 
-    free(workers);
-    workers = NULL;
+    int unresolved_workers = 0;
 
-    printf("[SUCCESS] All workers have been stopped.\n");
+    for (int i = 0; i < WORKER_COUNT; i++) {
 
-    log_message("SUCCESS", "All workers have been stopped.");
+        if (workers[i].pid > 0) {
+            unresolved_workers++;
+        }
+    }
+
+    if (unresolved_workers == 0) {
+
+        free(workers);
+        workers = NULL;
+
+        printf("[SUCCESS] All workers have been stopped.\n");
+        log_message("SUCCESS", "All workers have been stopped.");
+
+    } else {
+
+        printf("[WARNING] Some workers could not be confirmed stopped.\n");
+        log_message("WARNING",
+                    "Some workers could not be confirmed stopped. Worker data retained.");
+    }
 }
 
 void print_worker_status(void) {
