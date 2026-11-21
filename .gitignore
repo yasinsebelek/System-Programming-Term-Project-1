@@ -3,6 +3,7 @@ bin/
 # Log files
 logs/
 
+watchdog
 
 # Object files
 *.o

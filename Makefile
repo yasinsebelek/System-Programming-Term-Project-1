@@ -1,8 +1,8 @@
 CC = gcc
 
-CFLAGS = -Wall -Wextra -std=c11 -D_POSIX_C_SOURCE=200809L -Iinclude
+CFLAGS = -Wall -Wextra -std=c11 -D_XOPEN_SOURCE=700 -Iinclude
 
-TARGET = bin/watchdog
+TARGET = watchdog
 WORKER = bin/worker
 
 SRC = src/main.c \
@@ -16,7 +16,7 @@ all: $(TARGET) $(WORKER)
 bin:
 	mkdir -p bin
 
-$(TARGET): $(SRC) | bin
+$(TARGET): $(SRC)
 	$(CC) $(CFLAGS) $(SRC) -o $(TARGET)
 
 $(WORKER): workers/worker.c | bin
