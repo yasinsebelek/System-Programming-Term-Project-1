@@ -20,39 +20,30 @@ static int shutting_down = 0;
 pid_t create_worker(void) {
 
     int error_pipe[2];
-
     if (pipe(error_pipe) == -1) {
-
         int error_code = errno;
         perror("[ERROR] pipe failed");
 
         char message[150];
-
         snprintf(message, sizeof(message),
                  "Failed to create error pipe | Error: %d",
                  error_code);
-
         log_message("ERROR", message);
-
         return -1;
     }
 
     int flags = fcntl(error_pipe[1], F_GETFD);
-
     if (flags == -1 ||
         fcntl(error_pipe[1], F_SETFD, flags | FD_CLOEXEC) == -1) {
-
         int error_code = errno;
 
         close(error_pipe[0]);
         close(error_pipe[1]);
 
         char message[150];
-
         snprintf(message, sizeof(message),
                  "Failed to configure error pipe | Error: %d",
                  error_code);
-
         log_message("ERROR", message);
 
         return -1;
@@ -63,36 +54,27 @@ pid_t create_worker(void) {
     pid_t pid = fork();
 
     if (pid < 0) {
-
         int error_code = errno;
+        perror("[ERROR] fork failed"); 
 
         close(error_pipe[0]);
         close(error_pipe[1]);
 
-        perror("[ERROR] fork failed");
-
         char message[150];
-
         snprintf(message, sizeof(message),
                  "Failed to create child process | Error: %d",
                  error_code);
-
         log_message("ERROR", message);
 
         return -1;
     }
 
     if (pid == 0) {
-
         close(error_pipe[0]);
 
         execl("./bin/worker", "worker", (char *)NULL);
 
         int error_code = errno;
-
-        /*
-         * Notify parent that exec failed.
-         */
         ssize_t written;
 
         do {
@@ -115,10 +97,10 @@ pid_t create_worker(void) {
                           sizeof(exec_error));
     } while (bytes_read == -1 && errno == EINTR);
 
+    int read_error = (bytes_read == -1) ? errno : 0; 
     close(error_pipe[0]);
 
     if (bytes_read > 0) {
-
         int status;
         pid_t result;
 
@@ -127,11 +109,9 @@ pid_t create_worker(void) {
         } while (result == -1 && errno == EINTR);
 
         char message[150];
-
         snprintf(message, sizeof(message),
                  "exec() failed for child process | PID: %d | Error: %d",
                  pid, exec_error);
-
         log_message("ERROR", message);
 
         fprintf(stderr, "[ERROR] exec failed: %s\n",
@@ -141,22 +121,53 @@ pid_t create_worker(void) {
     }
 
     if (bytes_read == -1) {
-
-        int error_code = errno;
-
-        kill(pid, SIGKILL);
+        int kill_result = kill(pid, SIGKILL);
+        int kill_error = (kill_result == -1) ? errno : 0;
 
         int status;
+        pid_t result;
 
-        while (waitpid(pid, &status, 0) == -1 && errno == EINTR) {
+        if (kill_result == 0 || kill_error == ESRCH) {
+            do {
+                result = waitpid(pid, &status, 0);
+            } while (result == -1 && errno == EINTR);
+        } else {
+            do {
+                result = waitpid(pid, &status, WNOHANG);
+            } while (result == -1 && errno == EINTR);
+        }
+
+        int wait_error = (result == -1) ? errno : 0;
+
+        if (result == pid) {
+            log_message("SUCCESS",
+                        "Child terminated and reaped after pipe read failure.");
+        } else if (result == 0) {
+            log_message("ERROR",
+                        "Child is still running. Termination could not be confirmed.");
+        } else if (wait_error == ECHILD) {
+            log_message("WARNING",
+                        "Child is no longer waitable.");
+        } else {
+            char wait_message[150];
+            snprintf(wait_message, sizeof(wait_message),
+                     "waitpid() failed after pipe read failure | Error: %d",
+                     wait_error);
+            log_message("ERROR", wait_message);
+        }
+
+        if (kill_result == -1 && kill_error != ESRCH) {
+            char kill_message[150];
+            snprintf(kill_message, sizeof(kill_message),
+                     "Failed to send SIGKILL to child | PID: %d | Error: %d",
+                     pid, kill_error);
+            log_message("ERROR", kill_message);
         }
 
         char message[150];
-
         snprintf(message, sizeof(message),
                  "Failed to read exec status | PID: %d | Error: %d",
-                 pid, error_code);
-
+                 pid, read_error);
         log_message("ERROR", message);
 
         return -1;
@@ -165,15 +176,14 @@ pid_t create_worker(void) {
     printf("[INFO] Child process created | PID: %d\n", pid);
 
     char message[100];
-
     snprintf(message, sizeof(message),
              "Child process created | PID: %d",
              pid);
-
     log_message("INFO", message);
 
     return pid;
 }
+
 
 int start_workers(void) {
 
@@ -221,11 +231,9 @@ int start_workers(void) {
                     i + 1);
 
             char message[150];
-
             snprintf(message, sizeof(message),
                      "Failed to create Worker #%d. Rolling back startup.",
                      i + 1);
-
             log_message("ERROR", message);
 
             stop_workers();
@@ -250,11 +258,9 @@ void restart_worker(Worker *worker, int worker_number) {
                worker_number, MAX_RESTARTS);
 
         char message[150];
-
         snprintf(message, sizeof(message),
                  "Worker #%d reached maximum restart limit (%d).",
                  worker_number, MAX_RESTARTS);
-
         log_message("ERROR", message);
 
         worker->status = WORKER_FAILED;
@@ -264,7 +270,6 @@ void restart_worker(Worker *worker, int worker_number) {
     }
 
     worker->status = WORKER_RESTARTING;
-
     worker->restart_count++;
 
     printf("\n[INFO] Restarting Worker #%d | Attempt: %d/%d\n",
@@ -273,13 +278,11 @@ void restart_worker(Worker *worker, int worker_number) {
            MAX_RESTARTS);
 
     char message[150];
-
     snprintf(message, sizeof(message),
              "Restarting Worker #%d | Attempt: %d/%d",
              worker_number,
              worker->restart_count,
              MAX_RESTARTS);
-
     log_message("WARNING", message);
 
     worker->pid = create_worker();
@@ -477,6 +480,21 @@ void periodic_check_workers(void) {
             }
         }
     }
+    
+    if (!shutting_down && !shutdown_requested) {
+        int running_count = 0;
+        for (int i = 0; i < WORKER_COUNT; i++) {
+            if (workers[i].status == WORKER_RUNNING && workers[i].pid > 0) {
+                running_count++;
+            }
+        }
+        char summary[100];
+        snprintf(summary, sizeof(summary),
+                 "Periodic check completed | Running workers: %d/%d",
+                 running_count, WORKER_COUNT);
+        log_message("INFO", summary);
+    }
+    
 }
 
 void stop_workers(void) {

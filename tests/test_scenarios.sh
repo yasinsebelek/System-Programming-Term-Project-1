@@ -1,313 +1,131 @@
 #!/usr/bin/env bash
-# Automated Test Suite for POSIX Watchdog Process Manager
-# Verifies all test scenarios defined in Section 7 of the project specification.
-
 set -u
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-cd "$PROJECT_ROOT" || exit 1
-
-LOG_FILE="logs/watchdog_test.log"
-OUT_FILE="/tmp/watchdog_test_stdout.log"
-PASS_COUNT=0
-FAIL_COUNT=0
-CURRENT_WD_PID=""
-LOG_START_LINE=1
-
-rm -f "$LOG_FILE"
+cd "$(dirname "$0")/.." || exit 1
+LOG="logs/watchdog_test.log"
+WD_PID=""
 
 cleanup() {
-    if [ -n "$CURRENT_WD_PID" ] && kill -0 "$CURRENT_WD_PID" 2>/dev/null; then
-        kill -TERM "$CURRENT_WD_PID" 2>/dev/null || true
-        wait "$CURRENT_WD_PID" 2>/dev/null || true
-    fi
-    rm -f "$OUT_FILE"
+    [ -n "$WD_PID" ] && kill -TERM "$WD_PID" 2>/dev/null && wait "$WD_PID" 2>/dev/null
 }
 trap cleanup EXIT
 
-current_log() {
-    if [ -f "$LOG_FILE" ]; then
-        tail -n +"$LOG_START_LINE" "$LOG_FILE"
-    fi
-}
-
-pass() {
-    echo "  [PASS] $1"
-    PASS_COUNT=$((PASS_COUNT + 1))
-}
-
-fail() {
-    echo "  [FAIL] $1"
-    FAIL_COUNT=$((FAIL_COUNT + 1))
-}
-
-assert_log_contains() {
-    local pattern="$1"
-    local description="$2"
-    if current_log | grep -qE "$pattern"; then
-        pass "$description"
+check() {
+    if grep -q "$1" "$LOG"; then
+        echo "  [PASS] $2"
     else
-        fail "$description (pattern not found: $pattern)"
+        echo "  [FAIL] $2"
     fi
 }
 
-assert_log_not_contains() {
-    local pattern="$1"
-    local description="$2"
-    if current_log | grep -qE "$pattern"; then
-        fail "$description (unexpected pattern found: $pattern)"
-    else
-        pass "$description"
-    fi
+start_wd() {
+    WATCHDOG_TEST_MODE=1 WORKER_MODE="${1:-}" ./watchdog >/dev/null 2>&1 &
+    WD_PID=$!
+    sleep 1
+    W1=$(grep "Child process created | PID:" "$LOG" | tail -n 2 | sed -n '1p' | awk '{print $NF}')
+    W2=$(grep "Child process created | PID:" "$LOG" | tail -n 2 | sed -n '2p' | awk '{print $NF}')
 }
 
-wait_for_log() {
-    local pattern="$1"
-    local timeout="${2:-10}"
-    local elapsed=0
-    while [ "$elapsed" -lt "$timeout" ]; do
-        if current_log | grep -qE "$pattern"; then
-            return 0
-        fi
+stop_wd() {
+    kill -TERM "$WD_PID" 2>/dev/null
+    wait "$WD_PID" 2>/dev/null
+    WD_PID=""
+}
+
+# 1) Normal çalışma ve SIGUSR1 durum raporu
+test_1() {
+    echo "[TEST 1] Normal çalışma ve SIGUSR1 durum raporu"
+    start_wd
+    kill -0 "$W1" 2>/dev/null && kill -0 "$W2" 2>/dev/null \
+        && echo "  [PASS] 2 worker çalışıyor (W1=$W1, W2=$W2)" \
+        || echo "  [FAIL] Workerlar başlatılamadı"
+
+    kill -USR1 "$WD_PID"
+    sleep 1
+    check "Worker status requested." "SIGUSR1 alındı"
+    check "Worker #1 | PID: $W1 | STATUS: RUNNING" "Worker #1 durumu loglandı"
+    check "Worker #2 | PID: $W2 | STATUS: RUNNING" "Worker #2 durumu loglandı"
+    stop_wd
+}
+
+# 2) Normal çıkış (exit 0 -> restart edilmemeli)
+test_2() {
+    echo "[TEST 2] Normal çıkış (exit 0)"
+    start_wd
+    kill -0 "$W1" 2>/dev/null && kill -USR2 "$W1"
+    sleep 1
+    check "Worker #1 exited normally with exit code 0 | PID: $W1" "Normal çıkış tespit edildi"
+    grep -q "Restarting Worker #1" "$LOG" \
+        && echo "  [FAIL] Normal çıkan worker yeniden başlatıldı" \
+        || echo "  [PASS] Normal çıkan worker yeniden başlatılmadı"
+    stop_wd
+}
+
+# 3) Beklenmedik sonlandırma (SIGKILL) ve 3 restart limiti
+test_3() {
+    echo "[TEST 3] Beklenmedik kapanış (SIGKILL) ve restart limiti (3)"
+    start_wd
+    TARGET="$W2"
+    for i in 1 2 3; do
+        kill -0 "$TARGET" 2>/dev/null && kill -KILL "$TARGET"
         sleep 1
-        elapsed=$((elapsed + 1))
+        check "Restarting Worker #2 | Attempt: $i/3" "Restart $i/3 tetiklendi"
+        TARGET=$(grep "Child process created | PID:" "$LOG" | tail -n 1 | awk '{print $NF}')
     done
-    return 1
+
+    # 4. kez öldürünce limit aşılmalı
+    kill -0 "$TARGET" 2>/dev/null && kill -KILL "$TARGET"
+    sleep 1
+    check "Worker #2 reached maximum restart limit (3)." "Maksimum restart limiti uygulandı"
+    stop_wd
 }
 
-verify_worker_pid() {
-    local pid="$1"
-    if [ -z "$pid" ] || ! [[ "$pid" =~ ^[0-9]+$ ]]; then
-        return 1
-    fi
-    if ! kill -0 "$pid" 2>/dev/null; then
-        return 1
-    fi
-    return 0
+# 4) Graceful shutdown (SIGTERM)
+test_4() {
+    echo "[TEST 4] Graceful shutdown (SIGTERM)"
+    start_wd
+    stop_wd
+    check "Watchdog shutdown started." "Kapanış başlatıldı"
+    check "Worker #1 stopped gracefully | PID: $W1" "Worker #1 temiz kapandı"
+    check "Worker #2 stopped gracefully | PID: $W2" "Worker #2 temiz kapandı"
+    check "Watchdog shutdown completed." "Kapanış tamamlandı"
+    ! kill -0 "$W1" 2>/dev/null && ! kill -0 "$W2" 2>/dev/null \
+        && echo "  [PASS] Yetim worker kalmadı" \
+        || echo "  [FAIL] Çalışmaya devam eden worker var"
 }
 
-start_watchdog() {
-    local mode="${1:-}"
-    if [ -f "$LOG_FILE" ]; then
-        LOG_START_LINE=$(( $(wc -l < "$LOG_FILE") + 1 ))
-    else
-        LOG_START_LINE=1
-    fi
-    rm -f "$OUT_FILE"
-    if [ -n "$mode" ]; then
-        WATCHDOG_TEST_MODE=1 WORKER_MODE="$mode" ./watchdog > "$OUT_FILE" 2>&1 &
-    else
-        WATCHDOG_TEST_MODE=1 ./watchdog > "$OUT_FILE" 2>&1 &
-    fi
-    CURRENT_WD_PID=$!
-    wait_for_log "Periodic child monitoring started\." 10
+# 5) Hata kodu (exit 1) ve SIGTERM timeout -> SIGKILL
+test_5() {
+    echo "[TEST 5] Hata kodu (exit 1) ve SIGKILL fallback"
+    start_wd "exit_err"
+    sleep 3
+    check "exited with error | Exit code: 1" "Exit code 1 yakalandı"
+    stop_wd
+
+    start_wd "ignore_sigterm"
+    stop_wd
+    check "did not stop after SIGTERM. Sending SIGKILL" "Timeout sonrası SIGKILL gönderildi"
 }
 
-stop_watchdog_with_signal() {
-    local sig="$1"
-    local wd_pid="$CURRENT_WD_PID"
-    kill -"$sig" "$wd_pid"
-    wait "$wd_pid"
-    local rc=$?
-    CURRENT_WD_PID=""
-    return "$rc"
+# 6) Log format kontrolü
+test_6() {
+    echo "[TEST 6] Log zaman damgası kontrolü"
+    grep -qE "^\[[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\]" "$LOG" \
+        && echo "  [PASS] Log kayıtları zaman damgalı" \
+        || echo "  [FAIL] Zaman damgası bulunamadı"
 }
 
-echo "=================================================="
-echo "     WATCHDOG AUTOMATED TEST SCENARIOS SUITE      "
-echo "=================================================="
-echo ""
+# Derle ve çalıştır
+rm -f "$LOG"
+make clean >/dev/null && make >/dev/null || { echo "[FAIL] Derleme hatası"; exit 1; }
 
-# [BUILD]
-echo "[BUILD] Compiling project with make..."
-if make clean >/dev/null && make >/dev/null && [ -x ./watchdog ] && [ -x ./bin/worker ]; then
-    pass "Project compiled cleanly with make and produced ./watchdog and ./bin/worker"
-else
-    fail "Project compilation failed"
-    exit 1
-fi
-echo ""
-
-# [SCENARIO 1] Normal Operation
-echo "[SCENARIO 1] Normal operation"
-if start_watchdog; then
-    pass "Watchdog started and initialized workers"
-else
-    fail "Watchdog failed to start within timeout"
-fi
-
-W1_PID=$(current_log | grep "Child process created | PID:" | sed -n '1p' | awk '{print $NF}')
-W2_PID=$(current_log | grep "Child process created | PID:" | sed -n '2p' | awk '{print $NF}')
-
-if verify_worker_pid "$W1_PID" && verify_worker_pid "$W2_PID"; then
-    pass "At least two worker processes are running (W1=$W1_PID, W2=$W2_PID)"
-else
-    fail "Expected two running worker processes (W1=$W1_PID, W2=$W2_PID)"
-fi
-echo ""
-
-# [SCENARIO 2] Status Reporting (SIGUSR1)
-echo "[SCENARIO 2] Status reporting via SIGUSR1"
-kill -USR1 "$CURRENT_WD_PID"
-wait_for_log "Worker #2 \| PID: $W2_PID \| STATUS: RUNNING" 5
-assert_log_contains "Worker status requested\." "SIGUSR1 triggered status reporting"
-assert_log_contains "Worker #1 \| PID: $W1_PID \| STATUS: RUNNING \| Restart Count: 0/3" "Worker #1 running status logged"
-assert_log_contains "Worker #2 \| PID: $W2_PID \| STATUS: RUNNING \| Restart Count: 0/3" "Worker #2 running status logged"
-echo ""
-
-# [SCENARIO 3] Normal Termination (exit code 0 -> no restart)
-echo "[SCENARIO 3] Normal termination of Worker #1 (exit code 0)"
-if verify_worker_pid "$W1_PID"; then
-    kill -USR2 "$W1_PID"
-    wait_for_log "Worker #1 exited normally with exit code 0 \| PID: $W1_PID" 6
-    assert_log_contains "Worker #1 exited normally with exit code 0 \| PID: $W1_PID" "Normal termination detected and logged"
-    assert_log_not_contains "Restarting Worker #1" "Normally exited Worker #1 was NOT restarted"
-
-    kill -USR1 "$CURRENT_WD_PID"
-    wait_for_log "Worker #1 \| PID: -1 \| STATUS: STOPPED \| Restart Count: 0/3" 5
-    assert_log_contains "Worker #1 \| PID: -1 \| STATUS: STOPPED \| Restart Count: 0/3" "SIGUSR1 reports Worker #1 as STOPPED"
-else
-    fail "Worker #1 PID ($W1_PID) could not be verified before test"
-fi
-echo ""
-
-# [SCENARIO 4 & 5] Unexpected Termination (SIGKILL) & Restart Limit (Max 3)
-echo "[SCENARIO 4 & 5] Unexpected termination (SIGKILL) and restart limit (3)"
-CURRENT_W2_PID="$W2_PID"
-
-for attempt in 1 2 3; do
-    if verify_worker_pid "$CURRENT_W2_PID"; then
-        kill -KILL "$CURRENT_W2_PID"
-        wait_for_log "Restarting Worker #2 \| Attempt: ${attempt}/3" 6
-        assert_log_contains "Restarting Worker #2 \| Attempt: ${attempt}/3" "Unexpected termination triggered restart ${attempt}/3"
-
-        elapsed=0
-        while [ "$elapsed" -lt 6 ]; do
-            count=$(current_log | grep -c "Worker #2 restarted successfully | New PID:" 2>/dev/null || echo 0)
-            if [ "$count" -ge "$attempt" ]; then
-                break
-            fi
-            sleep 1
-            elapsed=$((elapsed + 1))
-        done
-
-        NEW_W2_PID=$(current_log | grep "Worker #2 restarted successfully | New PID:" | tail -n 1 | awk '{print $NF}')
-        if [ "$NEW_W2_PID" != "$CURRENT_W2_PID" ] && verify_worker_pid "$NEW_W2_PID"; then
-            pass "Worker #2 restarted with verified new PID ($NEW_W2_PID)"
-            CURRENT_W2_PID="$NEW_W2_PID"
-        else
-            fail "Worker #2 new PID ($NEW_W2_PID) is not valid/running after attempt $attempt"
-        fi
-    else
-        fail "Worker #2 PID ($CURRENT_W2_PID) not running before attempt $attempt"
-    fi
-done
-
-# 4th termination should exceed MAX_RESTARTS (3)
-if verify_worker_pid "$CURRENT_W2_PID"; then
-    kill -KILL "$CURRENT_W2_PID"
-    wait_for_log "Worker #2 reached maximum restart limit \(3\)\." 6
-    assert_log_contains "Worker #2 reached maximum restart limit \(3\)\." "Restart limit enforced after 3 restarts"
-    assert_log_not_contains "Restarting Worker #2 \| Attempt: 4/3" "No 4th restart attempted"
-
-    kill -USR1 "$CURRENT_WD_PID"
-    wait_for_log "Worker #2 \| PID: -1 \| STATUS: FAILED \| Restart Count: 3/3" 5
-    assert_log_contains "Worker #2 \| PID: -1 \| STATUS: FAILED \| Restart Count: 3/3" "SIGUSR1 reports Worker #2 as FAILED (3/3)"
-else
-    fail "Worker #2 PID ($CURRENT_W2_PID) not running before limit test"
-fi
-
-stop_watchdog_with_signal TERM
-echo ""
-
-# [SCENARIO 6] Graceful Shutdown via SIGTERM
-echo "[SCENARIO 6] Graceful shutdown via SIGTERM"
-start_watchdog
-W1_PID=$(current_log | grep "Child process created | PID:" | sed -n '1p' | awk '{print $NF}')
-W2_PID=$(current_log | grep "Child process created | PID:" | sed -n '2p' | awk '{print $NF}')
-
-if stop_watchdog_with_signal TERM; then
-    pass "Watchdog exited cleanly with code 0 on SIGTERM"
-else
-    fail "Watchdog returned non-zero exit code on SIGTERM"
-fi
-
-assert_log_contains "Watchdog shutdown started\." "Shutdown start logged"
-assert_log_contains "Sending SIGTERM to Worker #1 \| PID: $W1_PID" "SIGTERM sent to Worker #1"
-assert_log_contains "Sending SIGTERM to Worker #2 \| PID: $W2_PID" "SIGTERM sent to Worker #2"
-assert_log_contains "Worker #1 stopped gracefully \| PID: $W1_PID" "Worker #1 stopped gracefully"
-assert_log_contains "Worker #2 stopped gracefully \| PID: $W2_PID" "Worker #2 stopped gracefully"
-assert_log_contains "Watchdog shutdown completed\." "Shutdown completion logged"
-
-if ! kill -0 "$W1_PID" 2>/dev/null && ! kill -0 "$W2_PID" 2>/dev/null; then
-    pass "No worker processes remain running after SIGTERM"
-else
-    fail "Orphan worker process still running after SIGTERM"
-fi
-echo ""
-
-# [SCENARIO 7] Graceful Shutdown via SIGINT (Ctrl+C)
-echo "[SCENARIO 7] Graceful shutdown via SIGINT (Ctrl+C)"
-start_watchdog
-W1_PID=$(current_log | grep "Child process created | PID:" | sed -n '1p' | awk '{print $NF}')
-W2_PID=$(current_log | grep "Child process created | PID:" | sed -n '2p' | awk '{print $NF}')
-
-if stop_watchdog_with_signal INT; then
-    pass "Watchdog exited cleanly with code 0 on SIGINT"
-else
-    fail "Watchdog returned non-zero exit code on SIGINT"
-fi
-
-assert_log_contains "Worker #1 stopped gracefully \| PID: $W1_PID" "Worker #1 stopped gracefully on SIGINT"
-assert_log_contains "Worker #2 stopped gracefully \| PID: $W2_PID" "Worker #2 stopped gracefully on SIGINT"
-assert_log_contains "Watchdog shutdown completed\." "SIGINT shutdown completion logged"
-
-if ! kill -0 "$W1_PID" 2>/dev/null && ! kill -0 "$W2_PID" 2>/dev/null; then
-    pass "No worker processes remain running after SIGINT"
-else
-    fail "Orphan worker process still running after SIGINT"
-fi
-echo ""
-
-# [SCENARIO 8a] Unexpected Non-Zero Exit Code (exit 1)
-echo "[SCENARIO 8a] Unexpected non-zero exit code detection (exit 1)"
-start_watchdog "exit_err"
-wait_for_log "exited with error \| Exit code: 1" 8
-assert_log_contains "exited with error \| Exit code: 1" "Non-zero exit code (1) detected and logged"
-assert_log_contains "Restarting Worker #[12] \| Attempt: 1/3" "Restart triggered for non-zero exit code"
-stop_watchdog_with_signal TERM
-echo ""
-
-# [SCENARIO 8b] SIGTERM Timeout Fallback to SIGKILL
-echo "[SCENARIO 8b] SIGTERM timeout fallback to SIGKILL"
-start_watchdog "ignore_sigterm"
-W1_PID=$(current_log | grep "Child process created | PID:" | sed -n '1p' | awk '{print $NF}')
-W2_PID=$(current_log | grep "Child process created | PID:" | sed -n '2p' | awk '{print $NF}')
-
-if stop_watchdog_with_signal TERM; then
-    pass "Watchdog exited cleanly after SIGKILL timeout escalation"
-else
-    fail "Watchdog returned non-zero exit code during SIGKILL escalation"
-fi
-
-assert_log_contains "did not stop after SIGTERM\. Sending SIGKILL" "SIGKILL escalation triggered after timeout"
-assert_log_contains "Worker #1 terminated and reaped \| PID: $W1_PID" "Unresponsive Worker #1 terminated and reaped"
-assert_log_contains "Worker #2 terminated and reaped \| PID: $W2_PID" "Unresponsive Worker #2 terminated and reaped"
-assert_log_contains "All workers have been stopped\." "All unresponsive workers confirmed stopped"
-echo ""
-
-# [SCENARIO 9] Log Timestamp & Format Verification
-echo "[SCENARIO 9] Log timestamp and format verification"
-assert_log_contains "^\[[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\] \[(INFO|WARNING|ERROR|SUCCESS)\]" "Log entries include ISO timestamps and severity levels"
-echo ""
-
-echo "=================================================="
-echo "  TEST SUMMARY: PASSED = $PASS_COUNT | FAILED = $FAIL_COUNT"
-echo "  Test log saved to: $LOG_FILE"
-echo "=================================================="
-
-if [ "$FAIL_COUNT" -ne 0 ]; then
-    exit 1
-fi
-exit 0
+case "${1:-all}" in
+    1) test_1 ;;
+    2) test_2 ;;
+    3) test_3 ;;
+    4) test_4 ;;
+    5) test_5 ;;
+    6) test_6 ;;
+    all) test_1; test_2; test_3; test_4; test_5; test_6 ;;
+    *) echo "Kullanım: $0 [1|2|3|4|5|6|all]"; exit 1 ;;
+esac

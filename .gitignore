@@ -1,8 +1,8 @@
 # Compiled binaries
-bin/
-# Log files
-logs/
 
+# Log files
+
+worker
 watchdog
 
 # Object files

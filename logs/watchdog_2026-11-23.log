@@ -1,0 +1,40 @@
+[2026-11-23 14:12:54] [INFO] Watchdog started | PID: 2560
+[2026-11-23 14:12:54] [INFO] Initializing workers...
+[2026-11-23 14:12:54] [INFO] Child process created | PID: 2561
+[2026-11-23 14:12:54] [INFO] Child process created | PID: 2562
+[2026-11-23 14:12:54] [SUCCESS] All workers initialized successfully.
+[2026-11-23 14:12:54] [INFO] Periodic child monitoring started.
+[2026-11-23 14:12:59] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 14:13:04] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 14:13:08] [INFO] Periodic child monitoring stopped.
+[2026-11-23 14:13:08] [INFO] Watchdog shutdown started.
+[2026-11-23 14:13:08] [INFO] Stopping all workers.
+[2026-11-23 14:13:08] [INFO] Sending SIGTERM to Worker #1 | PID: 2561
+[2026-11-23 14:13:08] [INFO] Sending SIGTERM to Worker #2 | PID: 2562
+[2026-11-23 14:13:08] [SUCCESS] Worker #1 stopped gracefully | PID: 2561
+[2026-11-23 14:13:08] [SUCCESS] Worker #2 stopped gracefully | PID: 2562
+[2026-11-23 14:13:08] [SUCCESS] All workers have been stopped.
+[2026-11-23 14:13:08] [SUCCESS] Watchdog shutdown completed.
+[2026-11-23 14:14:51] [INFO] Watchdog started | PID: 2944
+[2026-11-23 14:14:51] [INFO] Initializing workers...
+[2026-11-23 14:14:51] [ERROR] exec() failed for child process | PID: 2945 | Error: 2
+[2026-11-23 14:14:51] [ERROR] Failed to create Worker #1. Rolling back startup.
+[2026-11-23 14:14:51] [INFO] Stopping all workers.
+[2026-11-23 14:14:51] [SUCCESS] All workers have been stopped.
+[2026-11-23 14:14:51] [ERROR] Watchdog startup failed.
+[2026-11-23 14:15:52] [INFO] Watchdog started | PID: 3221
+[2026-11-23 14:15:52] [INFO] Initializing workers...
+[2026-11-23 14:15:52] [INFO] Child process created | PID: 3222
+[2026-11-23 14:15:52] [INFO] Child process created | PID: 3223
+[2026-11-23 14:15:52] [SUCCESS] All workers initialized successfully.
+[2026-11-23 14:15:52] [INFO] Periodic child monitoring started.
+[2026-11-23 14:15:57] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 14:15:58] [INFO] Periodic child monitoring stopped.
+[2026-11-23 14:15:58] [INFO] Watchdog shutdown started.
+[2026-11-23 14:15:58] [INFO] Stopping all workers.
+[2026-11-23 14:15:58] [INFO] Sending SIGTERM to Worker #1 | PID: 3222
+[2026-11-23 14:15:58] [INFO] Sending SIGTERM to Worker #2 | PID: 3223
+[2026-11-23 14:15:58] [SUCCESS] Worker #1 stopped gracefully | PID: 3222
+[2026-11-23 14:15:58] [SUCCESS] Worker #2 stopped gracefully | PID: 3223
+[2026-11-23 14:15:58] [SUCCESS] All workers have been stopped.
+[2026-11-23 14:15:58] [SUCCESS] Watchdog shutdown completed.
