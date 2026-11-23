@@ -3,9 +3,6 @@ bin/
 worker
 watchdog
 
-# Runtime log files
-logs/*.log
-
 # Object files
 *.o
 

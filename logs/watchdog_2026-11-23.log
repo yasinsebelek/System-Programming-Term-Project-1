@@ -1,0 +1,160 @@
+[2026-11-23 15:00:21] [INFO] Watchdog started | PID: 8890
+[2026-11-23 15:00:21] [INFO] Initializing workers...
+[2026-11-23 15:00:21] [INFO] Child process created | PID: 8891
+[2026-11-23 15:00:21] [INFO] Child process created | PID: 8892
+[2026-11-23 15:00:21] [SUCCESS] All workers initialized successfully.
+[2026-11-23 15:00:21] [INFO] Periodic child monitoring started.
+[2026-11-23 15:00:26] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:00:31] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:00:36] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:00:41] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:00:46] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:00:51] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:00:52] [INFO] Worker status requested.
+[2026-11-23 15:00:52] [INFO] Worker #1 | PID: 8891 | STATUS: RUNNING | Restart Count: 0/3
+[2026-11-23 15:00:52] [INFO] Worker #2 | PID: 8892 | STATUS: RUNNING | Restart Count: 0/3
+[2026-11-23 15:00:56] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:01:01] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:01:06] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:01:11] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:01:16] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:01:21] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:01:26] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:01:26] [WARNING] Worker #1 terminated | PID: 8891
+[2026-11-23 15:01:26] [INFO] Worker #1 exited normally with exit code 0 | PID: 8891
+[2026-11-23 15:01:31] [INFO] Periodic check completed | Running workers: 1/2
+[2026-11-23 15:01:36] [INFO] Periodic check completed | Running workers: 1/2
+[2026-11-23 15:01:41] [INFO] Periodic check completed | Running workers: 1/2
+[2026-11-23 15:01:46] [INFO] Periodic check completed | Running workers: 1/2
+[2026-11-23 15:01:51] [INFO] Periodic check completed | Running workers: 1/2
+[2026-11-23 15:01:55] [WARNING] Worker #2 terminated | PID: 8892
+[2026-11-23 15:01:55] [WARNING] Worker #2 terminated by signal: 9
+[2026-11-23 15:01:55] [WARNING] Restarting Worker #2 | Attempt: 1/3
+[2026-11-23 15:01:55] [INFO] Child process created | PID: 9179
+[2026-11-23 15:01:55] [SUCCESS] Worker #2 restarted successfully | New PID: 9179
+[2026-11-23 15:01:56] [INFO] Periodic check completed | Running workers: 1/2
+[2026-11-23 15:02:01] [INFO] Periodic check completed | Running workers: 1/2
+[2026-11-23 15:02:06] [INFO] Periodic check completed | Running workers: 1/2
+[2026-11-23 15:02:11] [INFO] Periodic check completed | Running workers: 1/2
+[2026-11-23 15:02:16] [WARNING] Worker #2 terminated | PID: 9179
+[2026-11-23 15:02:16] [INFO] Worker #2 exited normally with exit code 0 | PID: 9179
+[2026-11-23 15:02:16] [INFO] Periodic check completed | Running workers: 0/2
+[2026-11-23 15:02:21] [INFO] Periodic check completed | Running workers: 0/2
+[2026-11-23 15:02:26] [INFO] Periodic check completed | Running workers: 0/2
+[2026-11-23 15:02:31] [INFO] Periodic check completed | Running workers: 0/2
+[2026-11-23 15:02:36] [INFO] Periodic check completed | Running workers: 0/2
+[2026-11-23 15:02:36] [INFO] Periodic child monitoring stopped.
+[2026-11-23 15:02:36] [INFO] Watchdog shutdown started.
+[2026-11-23 15:02:36] [INFO] Stopping all workers.
+[2026-11-23 15:02:36] [SUCCESS] All workers have been stopped.
+[2026-11-23 15:02:36] [SUCCESS] Watchdog shutdown completed.
+[2026-11-23 15:02:38] [INFO] Watchdog started | PID: 9435
+[2026-11-23 15:02:38] [INFO] Initializing workers...
+[2026-11-23 15:02:38] [INFO] Child process created | PID: 9436
+[2026-11-23 15:02:38] [INFO] Child process created | PID: 9437
+[2026-11-23 15:02:38] [SUCCESS] All workers initialized successfully.
+[2026-11-23 15:02:38] [INFO] Periodic child monitoring started.
+[2026-11-23 15:02:43] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:02:48] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:02:50] [WARNING] Worker #1 terminated | PID: 9436
+[2026-11-23 15:02:50] [WARNING] Worker #1 terminated by signal: 9
+[2026-11-23 15:02:50] [WARNING] Restarting Worker #1 | Attempt: 1/3
+[2026-11-23 15:02:50] [INFO] Child process created | PID: 9445
+[2026-11-23 15:02:50] [SUCCESS] Worker #1 restarted successfully | New PID: 9445
+[2026-11-23 15:02:53] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:02:58] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:03:02] [WARNING] Worker #1 terminated | PID: 9445
+[2026-11-23 15:03:02] [WARNING] Worker #1 terminated by signal: 9
+[2026-11-23 15:03:02] [WARNING] Restarting Worker #1 | Attempt: 2/3
+[2026-11-23 15:03:02] [INFO] Child process created | PID: 9531
+[2026-11-23 15:03:02] [SUCCESS] Worker #1 restarted successfully | New PID: 9531
+[2026-11-23 15:03:03] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:03:08] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:03:12] [WARNING] Worker #1 terminated | PID: 9531
+[2026-11-23 15:03:12] [WARNING] Worker #1 terminated by signal: 9
+[2026-11-23 15:03:12] [WARNING] Restarting Worker #1 | Attempt: 3/3
+[2026-11-23 15:03:12] [INFO] Child process created | PID: 9618
+[2026-11-23 15:03:12] [SUCCESS] Worker #1 restarted successfully | New PID: 9618
+[2026-11-23 15:03:13] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:03:18] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:03:23] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:03:28] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:03:32] [WARNING] Worker #1 terminated | PID: 9618
+[2026-11-23 15:03:32] [WARNING] Worker #1 terminated by signal: 9
+[2026-11-23 15:03:32] [ERROR] Worker #1 reached maximum restart limit (3).
+[2026-11-23 15:03:33] [INFO] Periodic check completed | Running workers: 1/2
+[2026-11-23 15:03:38] [INFO] Periodic check completed | Running workers: 1/2
+[2026-11-23 15:03:43] [INFO] Periodic check completed | Running workers: 1/2
+[2026-11-23 15:03:48] [INFO] Periodic check completed | Running workers: 1/2
+[2026-11-23 15:03:51] [INFO] Periodic child monitoring stopped.
+[2026-11-23 15:03:51] [INFO] Watchdog shutdown started.
+[2026-11-23 15:03:51] [INFO] Stopping all workers.
+[2026-11-23 15:03:51] [INFO] Sending SIGTERM to Worker #2 | PID: 9437
+[2026-11-23 15:03:52] [SUCCESS] Worker #2 stopped gracefully | PID: 9437
+[2026-11-23 15:03:52] [SUCCESS] All workers have been stopped.
+[2026-11-23 15:03:52] [SUCCESS] Watchdog shutdown completed.
+[2026-11-23 15:03:54] [INFO] Watchdog started | PID: 9951
+[2026-11-23 15:03:54] [INFO] Initializing workers...
+[2026-11-23 15:03:54] [INFO] Child process created | PID: 9952
+[2026-11-23 15:03:54] [INFO] Child process created | PID: 9953
+[2026-11-23 15:03:54] [SUCCESS] All workers initialized successfully.
+[2026-11-23 15:03:54] [INFO] Periodic child monitoring started.
+[2026-11-23 15:03:59] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:04:04] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:04:07] [INFO] Periodic child monitoring stopped.
+[2026-11-23 15:04:07] [INFO] Watchdog shutdown started.
+[2026-11-23 15:04:07] [INFO] Stopping all workers.
+[2026-11-23 15:04:07] [INFO] Sending SIGTERM to Worker #1 | PID: 9952
+[2026-11-23 15:04:07] [INFO] Sending SIGTERM to Worker #2 | PID: 9953
+[2026-11-23 15:04:08] [SUCCESS] Worker #1 stopped gracefully | PID: 9952
+[2026-11-23 15:04:08] [SUCCESS] Worker #2 stopped gracefully | PID: 9953
+[2026-11-23 15:04:08] [SUCCESS] All workers have been stopped.
+[2026-11-23 15:04:08] [SUCCESS] Watchdog shutdown completed.
+[2026-11-23 15:04:45] [INFO] Watchdog started | PID: 10122
+[2026-11-23 15:04:45] [INFO] Initializing workers...
+[2026-11-23 15:04:45] [INFO] Child process created | PID: 10123
+[2026-11-23 15:04:45] [INFO] Child process created | PID: 10124
+[2026-11-23 15:04:45] [SUCCESS] All workers initialized successfully.
+[2026-11-23 15:04:45] [INFO] Periodic child monitoring started.
+[2026-11-23 15:04:50] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:04:55] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:05:00] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:05:02] [INFO] Periodic child monitoring stopped.
+[2026-11-23 15:05:02] [INFO] Watchdog shutdown started.
+[2026-11-23 15:05:02] [INFO] Stopping all workers.
+[2026-11-23 15:05:02] [INFO] Sending SIGTERM to Worker #1 | PID: 10123
+[2026-11-23 15:05:02] [INFO] Sending SIGTERM to Worker #2 | PID: 10124
+[2026-11-23 15:05:03] [SUCCESS] Worker #1 stopped gracefully | PID: 10123
+[2026-11-23 15:05:03] [SUCCESS] Worker #2 stopped gracefully | PID: 10124
+[2026-11-23 15:05:03] [SUCCESS] All workers have been stopped.
+[2026-11-23 15:05:03] [SUCCESS] Watchdog shutdown completed.
+[2026-11-23 15:11:15] [INFO] Watchdog started | PID: 10584
+[2026-11-23 15:11:15] [INFO] Initializing workers...
+[2026-11-23 15:11:15] [INFO] Child process created | PID: 10585
+[2026-11-23 15:11:15] [INFO] Child process created | PID: 10586
+[2026-11-23 15:11:15] [SUCCESS] All workers initialized successfully.
+[2026-11-23 15:11:15] [INFO] Periodic child monitoring started.
+[2026-11-23 15:11:20] [INFO] Periodic child monitoring stopped.
+[2026-11-23 15:11:20] [INFO] Watchdog shutdown started.
+[2026-11-23 15:11:20] [INFO] Stopping all workers.
+[2026-11-23 15:11:20] [INFO] Sending SIGTERM to Worker #1 | PID: 10585
+[2026-11-23 15:11:20] [INFO] Sending SIGTERM to Worker #2 | PID: 10586
+[2026-11-23 15:11:21] [SUCCESS] Worker #1 stopped gracefully | PID: 10585
+[2026-11-23 15:11:21] [SUCCESS] Worker #2 stopped gracefully | PID: 10586
+[2026-11-23 15:11:21] [SUCCESS] All workers have been stopped.
+[2026-11-23 15:11:21] [SUCCESS] Watchdog shutdown completed.
+[2026-11-23 16:06:10] [INFO] Watchdog started | PID: 15295
+[2026-11-23 16:06:10] [INFO] Initializing workers...
+[2026-11-23 16:06:10] [INFO] Child process created | PID: 15296
+[2026-11-23 16:06:10] [INFO] Child process created | PID: 15297
+[2026-11-23 16:06:10] [SUCCESS] All workers initialized successfully.
+[2026-11-23 16:06:10] [INFO] Periodic child monitoring started.
+[2026-11-23 16:06:15] [INFO] Periodic child monitoring stopped.
+[2026-11-23 16:06:15] [INFO] Watchdog shutdown started.
+[2026-11-23 16:06:15] [INFO] Stopping all workers.
+[2026-11-23 16:06:15] [INFO] Sending SIGTERM to Worker #1 | PID: 15296
+[2026-11-23 16:06:15] [INFO] Sending SIGTERM to Worker #2 | PID: 15297
+[2026-11-23 16:06:15] [SUCCESS] Worker #1 stopped gracefully | PID: 15296
+[2026-11-23 16:06:15] [SUCCESS] Worker #2 stopped gracefully | PID: 15297
+[2026-11-23 16:06:15] [SUCCESS] All workers have been stopped.
+[2026-11-23 16:06:15] [SUCCESS] Watchdog shutdown completed.
