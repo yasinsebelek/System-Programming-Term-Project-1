@@ -14,26 +14,20 @@ typedef enum {
     WORKER_FAILED
 } WorkerStatus;
 
-// Stores information about each worker
 typedef struct {
     pid_t pid;
     int restart_count;
     WorkerStatus status;
 } Worker;
 
-// Starts all child worker processes
 int start_workers(void);
 
-// Creates a single child process
 pid_t create_worker(void);
 
-// Checks terminated child processes
 void check_children(void);
 
-// Restarts a worker using its address
 void restart_worker(Worker *worker, int worker_number);
 
-// Stops all running workers
 void stop_workers(void);
 
 void print_worker_status(void);

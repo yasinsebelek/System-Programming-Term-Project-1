@@ -1,29 +1,37 @@
-CC = gcc
+CC      = gcc
+CFLAGS  = -Wall -Wextra -std=c11 -D_XOPEN_SOURCE=700 -Iinclude
 
-CFLAGS = -Wall -Wextra -std=c11 -D_XOPEN_SOURCE=700 -Iinclude
+TARGET  = watchdog
+WORKER  = bin/worker
 
-TARGET = watchdog
-WORKER = bin/worker
-
-SRC = src/main.c \
-      src/process_manager.c \
-      src/signal_manager.c \
-      src/logger.c
-
+SRC     = src/main.c \
+          src/process_manager.c \
+          src/signal_manager.c \
+          src/logger.c
+OBJ     = $(SRC:.c=.o)
+HEADERS = include/process_manager.h \
+          include/signal_manager.h \
+          include/logger.h
 
 all: $(TARGET) $(WORKER)
+
+$(TARGET): $(OBJ)
+	$(CC) $(CFLAGS) $(OBJ) -o $(TARGET)
+
+src/%.o: src/%.c $(HEADERS)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 bin:
 	mkdir -p bin
 
-$(TARGET): $(SRC)
-	$(CC) $(CFLAGS) $(SRC) -o $(TARGET)
-
 $(WORKER): workers/worker.c | bin
-	$(CC) $(CFLAGS) workers/worker.c -o $(WORKER)
+	$(CC) $(CFLAGS) $< -o $@
+
+test: all
+	./tests/test_scenarios.sh
 
 clean:
-	rm -f $(TARGET) $(WORKER)
+	rm -f $(TARGET) $(WORKER) $(OBJ)
 	rmdir bin 2>/dev/null || true
 
-.PHONY: all clean
+.PHONY: all clean test

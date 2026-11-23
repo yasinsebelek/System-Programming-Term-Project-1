@@ -184,7 +184,6 @@ pid_t create_worker(void) {
     return pid;
 }
 
-
 int start_workers(void) {
 
     if (workers != NULL) {
@@ -539,7 +538,7 @@ void stop_workers(void) {
         }
     }
 
-    for (int attempt = 0; attempt < SHUTDOWN_TIMEOUT; attempt++) {
+    for (int attempt = 0; attempt <= SHUTDOWN_TIMEOUT; attempt++) {
 
         int running_workers = 0;
 
@@ -597,12 +596,14 @@ void stop_workers(void) {
             }
         }
 
-        if (running_workers == 0) {
+        if (running_workers == 0 || attempt == SHUTDOWN_TIMEOUT) {
             break;
         }
-
-        struct timespec ts = {1, 0};
-        nanosleep(&ts, NULL);
+        struct timespec req = {1, 0};
+        struct timespec rem = {0, 0};
+        while (nanosleep(&req, &rem) == -1 && errno == EINTR) {
+            req = rem;
+        }
     }
 
     for (int i = 0; i < WORKER_COUNT; i++) {

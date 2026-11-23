@@ -28,7 +28,6 @@ int main(void) {
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
 
-    /* Ignore SIGINT so watchdog manages Ctrl+C shutdown via SIGTERM */
     sa.sa_handler = SIG_IGN;
     if (sigaction(SIGINT, &sa, NULL) == -1) {
         perror("[WORKER] sigaction SIGINT");
@@ -84,10 +83,13 @@ int main(void) {
 
     if (terminate_requested) {
         printf("[WORKER %d] Received SIGTERM, exiting gracefully.\n", pid);
-    } else {
-        printf("[WORKER %d] Completed work normally (exit 0).\n", pid);
+        fflush(stdout);
+        sa.sa_handler = SIG_DFL;
+        sigaction(SIGTERM, &sa, NULL);
+        raise(SIGTERM);
     }
+    printf("[WORKER %d] Completed work normally (exit 0).\n", pid);
     fflush(stdout);
-
     return EXIT_SUCCESS;
+    
 }
