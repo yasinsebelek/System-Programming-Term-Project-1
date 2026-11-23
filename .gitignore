@@ -1,12 +1,14 @@
 # Compiled binaries
-
-# Log files
-
+bin/
 worker
 watchdog
+
+# Runtime log files
+logs/*.log
 
 # Object files
 *.o
 
 # macOS system files
 .DS_Store
+

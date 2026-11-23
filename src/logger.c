@@ -106,7 +106,7 @@ int init_logger(void) {
 
 void log_message(const char *level, const char *message) {
 
-    if (log_file == NULL) {
+    if (log_file == NULL || level == NULL || message == NULL) {
         return;
     }
 
@@ -133,7 +133,7 @@ void log_message(const char *level, const char *message) {
 
         if (need_rotate) {
             if (open_daily_log(today) == -1) {
-                return;
+                fprintf(stderr, "[WARNING] Log rotation failed; continuing with existing log file.\n");
             }
         }
     }
@@ -141,8 +141,39 @@ void log_message(const char *level, const char *message) {
     char timestamp[20];
     strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", &local_time);
 
-    fprintf(log_file, "[%s] [%s] %s\n", timestamp, level, message);
-    fflush(log_file);
+    if (fprintf(log_file, "[%s] [%s] %s\n", timestamp, level, message) < 0 ||
+        fflush(log_file) != 0) {
+        perror("Failed to write log record");
+    }
+}
+
+void log_worker_status(int worker_number,
+                       pid_t pid,
+                       const char *status,
+                       int restart_count,
+                       int max_restarts) {
+
+    const char *safe_status = (status != NULL) ? status : "UNKNOWN";
+    char message[200];
+
+    if (pid > 0) {
+        snprintf(message, sizeof(message),
+                 "Worker #%d | PID: %d | STATUS: %s | Restart Count: %d/%d",
+                 worker_number,
+                 (int)pid,
+                 safe_status,
+                 restart_count,
+                 max_restarts);
+    } else {
+        snprintf(message, sizeof(message),
+                 "Worker #%d | PID: N/A | STATUS: %s | Restart Count: %d/%d",
+                 worker_number,
+                 safe_status,
+                 restart_count,
+                 max_restarts);
+    }
+
+    log_message("INFO", message);
 }
 
 void close_logger(void) {

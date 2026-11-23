@@ -34,4 +34,9 @@ void print_worker_status(void);
 
 void periodic_check_workers(void);
 
+int start_periodic_timer(unsigned int interval_seconds);
+
+int stop_periodic_timer(void);
+
 #endif
+

@@ -28,8 +28,8 @@ The `watchdog` parent process creates, monitors, restarts, reports on, logs, and
 - **Termination Monitoring:** Detects child exits asynchronously via `SIGCHLD` and reaps all terminated children in a non-blocking `waitpid(-1, &status, WNOHANG)` loop to prevent zombie processes.
 - **Bounded Automatic Restart:** Distinguishes normal exits (`exit(0)` → `STOPPED`, no restart) from error exits (`exit != 0`) and signal terminations (`WIFSIGNALED`). Unexpectedly terminated workers are automatically restarted up to **3 times** (`MAX_RESTARTS = 3`), after which they transition to `FAILED`.
 - **Periodic Health Checks:** Uses `setitimer(ITIMER_REAL, ...)` and `SIGALRM` every **5 seconds** to verify worker liveness via `kill(pid, 0)` and log active worker counts.
-- **Status Reporting (`SIGUSR1`):** Prints and logs each worker's PID, current state (`RUNNING`, `STOPPED`, `RESTARTING`, `FAILED`), and restart count (`X/3`).
-- **Graceful Shutdown (`SIGINT` / `SIGTERM`):** Stops the periodic timer, blocks new restarts, sends `SIGTERM` to all active workers, waits up to **5 seconds** (`SHUTDOWN_TIMEOUT = 5`) for clean exit, and escalates unresponsive workers to `SIGKILL` before reaping them and freeing resources.
+- **Status Reporting (`SIGUSR1`):** Prints and logs each worker's PID (or `N/A` when not running), current state (`RUNNING`, `STOPPED`, `RESTARTING`, `FAILED`), and restart count (`X/3`) via `log_worker_status()`.
+- **Graceful Shutdown (`SIGINT` / `SIGTERM`):** Stops the periodic timer, blocks new restarts, sends `SIGTERM` to all active workers, polls for up to **5 seconds** (`SHUTDOWN_TIMEOUT = 5`) for clean exit, and escalates unresponsive workers to `SIGKILL` before reaping them and freeing resources.
 - **Structured Timestamped Logging:** Automatically creates `logs/`, writes daily log files (`logs/watchdog_YYYY-MM-DD.log`) with 1 MB size-based rotation, sets `FD_CLOEXEC` on the log file descriptor, and supports an isolated test log via `WATCHDOG_TEST_MODE=1`.
 
 ---
@@ -54,9 +54,10 @@ watchdog-project/
 ├── tests/
 │   └── test_scenarios.sh       # Automated test suite (7 scenarios)
 ├── bin/                        # Generated on build (bin/worker)
-├── logs/                       # Generated at runtime (watchdog_YYYY-MM-DD.log / watchdog_test.log)
+├── logs/                       # Generated at runtime (ignored by git)
 └── docs/
-    └── REPORT.pdf              # Project report and commit history
+    ├── REPORT.pdf              # Project report and commit history
+    └── sample_watchdog.log     # Authentic single-session sample log output
 ```
 
 ---
@@ -64,20 +65,23 @@ watchdog-project/
 ## Architecture Overview
 
 1. **Signal Handling (`src/signal_manager.c`)**:
-   - Installs handlers via `sigaction()` (`SA_RESTART`) for `SIGCHLD`, `SIGINT`, `SIGTERM`, `SIGUSR1`, and `SIGALRM`.
+   - Installs handlers via `sigaction()` for `SIGCHLD` (`SA_RESTART | SA_NOCLDSTOP`), `SIGINT`/`SIGTERM` (interruptible shutdown flags `0`), `SIGUSR1` (`SA_RESTART`), and `SIGALRM` (`SA_RESTART`).
    - Handlers are strictly **async-signal-safe**: they only set `volatile sig_atomic_t` flags (`child_exited`, `shutdown_requested`, `status_requested`, `periodic_check_requested`). No I/O, memory allocation, or process creation is performed inside handlers.
 
 2. **Main Control Loop (`src/main.c`)**:
-   - Initializes the logger, installs signal handlers, starts worker processes, and configures a 5-second `ITIMER_REAL` periodic timer.
+   - Initializes the logger, installs signal handlers, starts worker processes, and starts the 5-second periodic timer via `start_periodic_timer()`.
    - Processes pending signal flags in the main loop and pauses with `nanosleep()`.
-   - On `SIGINT` or `SIGTERM`, stops the periodic timer, calls `stop_workers()`, logs shutdown completion, and closes the log file.
+   - On `SIGINT` or `SIGTERM`, stops the periodic timer via `stop_periodic_timer()`, calls `stop_workers()`, logs shutdown completion, and closes the log file.
 
 3. **Process Supervision (`src/process_manager.c`)**:
    - Maintains a dynamically allocated table of `Worker` structs (`pid`, `restart_count`, `status`).
    - Rolls back startup cleanly if any worker fails to spawn.
-   - Handles reaping (`check_children`), bounded restarts (`restart_worker`), periodic liveness checks (`periodic_check_workers`), status reporting (`print_worker_status`), and two-phase graceful shutdown (`SIGTERM` → timeout → `SIGKILL` in `stop_workers`).
+   - Handles reaping (`check_children`), bounded restarts (`restart_worker`), `setitimer()` lifecycle (`start_periodic_timer`/`stop_periodic_timer`), periodic liveness checks (`periodic_check_workers`), status reporting (`print_worker_status` delegating file logging to `log_worker_status`), and two-phase graceful shutdown (`SIGTERM` → 5s timeout → `SIGKILL` in `stop_workers`).
 
-4. **Worker Process (`workers/worker.c` → `bin/worker`)**:
+4. **Logging Subsystem (`src/logger.c`)**:
+   - Manages timestamped daily log files with 1 MB rotation and `FD_CLOEXEC`, test-mode logging (`WATCHDOG_TEST_MODE=1`), and structured `SIGUSR1` worker status log formatting via `log_worker_status()`.
+
+5. **Worker Process (`workers/worker.c` → `bin/worker`)**:
    - Runs as a standalone executable printing its `PID`, `PPID`, and a periodic `STATUS: RUNNING` heartbeat every 3 seconds.
    - Ignores `SIGINT` so `Ctrl+C` is coordinated exclusively by `watchdog` via `SIGTERM`.
    - Exits cleanly on `SIGTERM` (graceful shutdown) and exits normally with code `0` on `SIGUSR2`.
@@ -92,10 +96,10 @@ watchdog-project/
 | `pipe()` & `fcntl(FD_CLOEXEC)` | Detect child `execl()` errors safely & prevent FD leaks | `src/process_manager.c`, `src/logger.c` |
 | `sigaction()` | Register reliable, async-signal-safe signal handlers | `src/signal_manager.c`, `workers/worker.c` |
 | `SIGCHLD` & `waitpid(..., WNOHANG)` | Detect and reap terminated children without zombies | `src/signal_manager.c`, `src/process_manager.c` |
-| `SIGUSR1` | Trigger worker status report to stdout and log file | `src/signal_manager.c`, `src/process_manager.c` |
+| `SIGUSR1` | Trigger worker status report to stdout and log file | `src/signal_manager.c`, `src/process_manager.c`, `src/logger.c` |
 | `SIGINT` & `SIGTERM` | Initiate controlled graceful shutdown | `src/signal_manager.c`, `src/main.c`, `src/process_manager.c` |
 | `kill()` & `SIGKILL` | Send `SIGTERM`, liveness check (`kill(pid, 0)`), and force-stop fallback | `src/process_manager.c` |
-| `setitimer()` & `SIGALRM` | Periodic 5-second worker health check | `src/main.c`, `src/signal_manager.c`, `src/process_manager.c` |
+| `setitimer()` & `SIGALRM` | Periodic 5-second worker health check | `src/signal_manager.c`, `src/process_manager.c`, `src/main.c` |
 | `nanosleep()` | Interruptible sleep in main loop, workers, and shutdown timeout | `src/main.c`, `src/process_manager.c`, `workers/worker.c` |
 
 ---
@@ -215,11 +219,11 @@ Or run a specific scenario (`1`–`7` or `all`):
 | # | Scenario | Verification |
 | :-: | :--- | :--- |
 | 1 | Normal Operation & `SIGUSR1` | 2 workers start and run; `SIGUSR1` logs PID and `RUNNING` state for both |
-| 2 | Normal Termination | `SIGUSR2` causes exit code `0`; detected, not restarted, no zombies |
-| 3 | Unexpected Termination & Restart Limit | Repeated `SIGKILL` triggers restarts `1/3`, `2/3`, `3/3`, then stops at limit |
+| 2 | Normal Termination | `SIGUSR2` and `WORKER_MODE=exit_ok` cause exit code `0`; detected, not restarted, `STOPPED` status logged, no zombies |
+| 3 | Unexpected Termination & Restart Limit | Repeated `SIGKILL` triggers restarts `1/3`, `2/3`, `3/3`, blocks 4th restart, and marks worker `FAILED` |
 | 4 | Graceful Shutdown (`SIGTERM`) | Watchdog stops and reaps all workers cleanly; no orphan processes |
 | 5 | Graceful Shutdown (`SIGINT` / `Ctrl+C`) | Watchdog stops and reaps all workers cleanly on `SIGINT` |
-| 6 | Error Exit & `SIGKILL` Fallback | `exit_err` triggers restart; `ignore_sigterm` escalates to `SIGKILL` after timeout |
+| 6 | Error Exit & `SIGKILL` Fallback | `exit_err` triggers restart; `ignore_sigterm` escalates to `SIGKILL`, reaps workers, and leaves no orphans |
 | 7 | Periodic Check & Log Format | `SIGALRM` logs `Running workers: 2/2` after 5s; log entries include valid timestamps |
 
 ---
@@ -234,40 +238,59 @@ Logs are written to `logs/watchdog_YYYY-MM-DD.log` (rotated automatically when e
 
 ### Sample Log Output
 
+Full authentic single-session output (also saved in `docs/sample_watchdog.log`):
+
 ```text
-[2026-11-23 15:00:21] [INFO] Watchdog started | PID: 8890
-[2026-11-23 15:00:21] [INFO] Initializing workers...
-[2026-11-23 15:00:21] [INFO] Child process created | PID: 8891
-[2026-11-23 15:00:21] [INFO] Child process created | PID: 8892
-[2026-11-23 15:00:21] [SUCCESS] All workers initialized successfully.
-[2026-11-23 15:00:21] [INFO] Periodic child monitoring started.
-[2026-11-23 15:00:26] [INFO] Periodic check completed | Running workers: 2/2
-[2026-11-23 15:00:52] [INFO] Worker status requested.
-[2026-11-23 15:00:52] [INFO] Worker #1 | PID: 8891 | STATUS: RUNNING | Restart Count: 0/3
-[2026-11-23 15:00:52] [INFO] Worker #2 | PID: 8892 | STATUS: RUNNING | Restart Count: 0/3
-[2026-11-23 15:01:26] [WARNING] Worker #1 terminated | PID: 8891
-[2026-11-23 15:01:26] [INFO] Worker #1 exited normally with exit code 0 | PID: 8891
-[2026-11-23 15:01:55] [WARNING] Worker #2 terminated | PID: 8892
-[2026-11-23 15:01:55] [WARNING] Worker #2 terminated by signal: 9
-[2026-11-23 15:01:55] [WARNING] Restarting Worker #2 | Attempt: 1/3
-[2026-11-23 15:01:55] [INFO] Child process created | PID: 9179
-[2026-11-23 15:01:55] [SUCCESS] Worker #2 restarted successfully | New PID: 9179
-[2026-11-23 15:03:32] [ERROR] Worker #1 reached maximum restart limit (3).
-[2026-11-23 15:03:51] [INFO] Periodic child monitoring stopped.
-[2026-11-23 15:03:51] [INFO] Watchdog shutdown started.
-[2026-11-23 15:03:51] [INFO] Stopping all workers.
-[2026-11-23 15:03:51] [INFO] Sending SIGTERM to Worker #2 | PID: 9437
-[2026-11-23 15:03:52] [SUCCESS] Worker #2 stopped gracefully | PID: 9437
-[2026-11-23 15:03:52] [SUCCESS] All workers have been stopped.
-[2026-11-23 15:03:52] [SUCCESS] Watchdog shutdown completed.
+[2026-11-23 15:58:46] [INFO] Watchdog started | PID: 13971
+[2026-11-23 15:58:46] [INFO] Initializing workers...
+[2026-11-23 15:58:46] [INFO] Child process created | PID: 13973
+[2026-11-23 15:58:46] [INFO] Child process created | PID: 13974
+[2026-11-23 15:58:46] [SUCCESS] All workers initialized successfully.
+[2026-11-23 15:58:46] [INFO] Periodic child monitoring started.
+[2026-11-23 15:58:51] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:58:52] [INFO] Worker status requested.
+[2026-11-23 15:58:52] [INFO] Worker #1 | PID: 13973 | STATUS: RUNNING | Restart Count: 0/3
+[2026-11-23 15:58:52] [INFO] Worker #2 | PID: 13974 | STATUS: RUNNING | Restart Count: 0/3
+[2026-11-23 15:58:53] [WARNING] Worker #2 terminated | PID: 13974
+[2026-11-23 15:58:53] [WARNING] Worker #2 terminated by signal: 9
+[2026-11-23 15:58:53] [WARNING] Restarting Worker #2 | Attempt: 1/3
+[2026-11-23 15:58:53] [INFO] Child process created | PID: 13985
+[2026-11-23 15:58:53] [SUCCESS] Worker #2 restarted successfully | New PID: 13985
+[2026-11-23 15:58:54] [WARNING] Worker #2 terminated | PID: 13985
+[2026-11-23 15:58:54] [WARNING] Worker #2 terminated by signal: 9
+[2026-11-23 15:58:54] [WARNING] Restarting Worker #2 | Attempt: 2/3
+[2026-11-23 15:58:54] [INFO] Child process created | PID: 13991
+[2026-11-23 15:58:54] [SUCCESS] Worker #2 restarted successfully | New PID: 13991
+[2026-11-23 15:58:55] [WARNING] Worker #2 terminated | PID: 13991
+[2026-11-23 15:58:55] [WARNING] Worker #2 terminated by signal: 9
+[2026-11-23 15:58:55] [WARNING] Restarting Worker #2 | Attempt: 3/3
+[2026-11-23 15:58:55] [INFO] Child process created | PID: 13997
+[2026-11-23 15:58:55] [SUCCESS] Worker #2 restarted successfully | New PID: 13997
+[2026-11-23 15:58:56] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 15:58:56] [WARNING] Worker #2 terminated | PID: 13997
+[2026-11-23 15:58:56] [WARNING] Worker #2 terminated by signal: 9
+[2026-11-23 15:58:56] [ERROR] Worker #2 reached maximum restart limit (3).
+[2026-11-23 15:58:57] [INFO] Worker status requested.
+[2026-11-23 15:58:57] [INFO] Worker #1 | PID: 13973 | STATUS: RUNNING | Restart Count: 0/3
+[2026-11-23 15:58:57] [INFO] Worker #2 | PID: N/A | STATUS: FAILED | Restart Count: 3/3
+[2026-11-23 15:58:58] [INFO] Periodic child monitoring stopped.
+[2026-11-23 15:58:58] [INFO] Watchdog shutdown started.
+[2026-11-23 15:58:58] [INFO] Stopping all workers.
+[2026-11-23 15:58:58] [INFO] Sending SIGTERM to Worker #1 | PID: 13973
+[2026-11-23 15:58:58] [SUCCESS] Worker #1 stopped gracefully | PID: 13973
+[2026-11-23 15:58:58] [SUCCESS] All workers have been stopped.
+[2026-11-23 15:58:58] [SUCCESS] Watchdog shutdown completed.
 ```
 
 ---
 
 ## Team & Task Allocation
 
-| Student | GitHub | Assigned Module | Primary Files |
-| :--- | :--- | :--- | :--- |
-| Student 1 Name | `Yasin Şebelek` | Signal Management & Main Program (`sigaction`, `SIGINT`/`SIGTERM`/`SIGUSR1`, main loop, graceful shutdown) | `include/signal_manager.h`, `src/signal_manager.c`, `src/main.c` |
-| Student 2 Name | `Yasin Şebelek` | Child Process Management (`fork`/`execl`, `SIGCHLD`/`waitpid`, bounded restarts, `SIGALRM`/`setitimer`) | `include/process_manager.h`, `src/process_manager.c`, `workers/worker.c` |
-| Student 3 Name | `Yasin Şebelek` | Logging, Build & Test Infrastructure (logger, `SIGUSR1` reporting, test suite, `Makefile`, docs) | `include/logger.h`, `src/logger.c`, `tests/test_scenarios.sh`, `Makefile`, `README.md` |
+> **Note:** This project was developed, integrated, tested, and documented individually by **Yasin Şebelek (`b221202036`)** across all three specification modules under the GitHub account `@yasinsebelek`.
+
+| Module | Responsible Member | GitHub | Assigned Responsibilities | Primary Files |
+| :--- | :--- | :--- | :--- | :--- |
+| Module 1 | Yasin Şebelek (`b221202036`) | `@yasinsebelek` | Signal Management & Main Program (`sigaction`, `SIGINT`/`SIGTERM`/`SIGUSR1`, main loop, graceful shutdown) | `include/signal_manager.h`, `src/signal_manager.c`, `src/main.c` |
+| Module 2 | Yasin Şebelek (`b221202036`) | `@yasinsebelek` | Child Process Management (`fork`/`execl`, `SIGCHLD`/`waitpid`, bounded restarts, `SIGALRM`/`setitimer`) | `include/process_manager.h`, `src/process_manager.c`, `workers/worker.c` |
+| Module 3 | Yasin Şebelek (`b221202036`) | `@yasinsebelek` | Logging, Build & Test Infrastructure (`logger`, `SIGUSR1` status logging, test suite, `Makefile`, docs) | `include/logger.h`, `src/logger.c`, `tests/test_scenarios.sh`, `Makefile`, `README.md`, `docs/REPORT.pdf` |
+

@@ -7,7 +7,10 @@ WD_PID=""
 FAIL=0
 
 cleanup() {
-    [ -n "$WD_PID" ] && kill -TERM "$WD_PID" 2>/dev/null && wait "$WD_PID" 2>/dev/null
+    if [ -n "$WD_PID" ]; then
+        kill -TERM "$WD_PID" 2>/dev/null
+        wait "$WD_PID" 2>/dev/null
+    fi
 }
 trap cleanup EXIT
 
@@ -20,28 +23,47 @@ check() {
     fi
 }
 
+verify_worker_pid() {
+    local pid="$1"
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || return 1
+    grep -q "PID: $pid$" "$LOG" 2>/dev/null || return 1
+    local comm
+    if comm=$(ps -p "$pid" -o comm= 2>/dev/null) && [ -n "$comm" ]; then
+        case "$comm" in
+            *worker*) return 0 ;;
+            *) return 1 ;;
+        esac
+    fi
+    return 0
+}
+
 start_wd() {
     rm -f "$LOG"
     WATCHDOG_TEST_MODE=1 WORKER_MODE="${1:-}" ./watchdog >/dev/null 2>&1 &
     WD_PID=$!
     sleep 1
-    W1=$(grep "Child process created | PID:" "$LOG" | sed -n '1p' | awk '{print $NF}')
-    W2=$(grep "Child process created | PID:" "$LOG" | sed -n '2p' | awk '{print $NF}')
+    W1=$(grep "Child process created | PID:" "$LOG" 2>/dev/null | sed -n '1p' | awk '{print $NF}')
+    W2=$(grep "Child process created | PID:" "$LOG" 2>/dev/null | sed -n '2p' | awk '{print $NF}')
 }
 
 stop_wd() {
-    kill -"${1:-TERM}" "$WD_PID" 2>/dev/null
-    wait "$WD_PID" 2>/dev/null
-    WD_PID=""
+    if [ -n "$WD_PID" ]; then
+        kill -"${1:-TERM}" "$WD_PID" 2>/dev/null
+        wait "$WD_PID" 2>/dev/null
+        WD_PID=""
+    fi
 }
 
 # 1) Normal çalışma ve SIGUSR1 durum raporu
 test_1() {
     echo "[TEST 1] Normal çalışma ve SIGUSR1 durum raporu"
     start_wd
-    kill -0 "$W1" 2>/dev/null && kill -0 "$W2" 2>/dev/null \
-        && echo "  [PASS] 2 worker çalışıyor (W1=$W1, W2=$W2)" \
-        || { echo "  [FAIL] Workerlar başlatılamadı"; FAIL=$((FAIL + 1)); }
+    if verify_worker_pid "$W1" && verify_worker_pid "$W2"; then
+        echo "  [PASS] 2 worker çalışıyor (W1=$W1, W2=$W2)"
+    else
+        echo "  [FAIL] Workerlar başlatılamadı"
+        FAIL=$((FAIL + 1))
+    fi
 
     kill -USR1 "$WD_PID"
     sleep 1
@@ -55,15 +77,29 @@ test_1() {
 test_2() {
     echo "[TEST 2] Normal çıkış (exit 0)"
     start_wd
-    kill -0 "$W1" 2>/dev/null && kill -USR2 "$W1"
+    if verify_worker_pid "$W1"; then
+        kill -USR2 "$W1"
+    fi
     sleep 1
-    check "Worker #1 exited normally with exit code 0 | PID: $W1" "Normal çıkış tespit edildi"
+    check "Worker #1 exited normally with exit code 0 | PID: $W1" "Normal çıkış (SIGUSR2) tespit edildi"
     grep -q "Restarting Worker #1" "$LOG" \
         && { echo "  [FAIL] Normal çıkan worker yeniden başlatıldı"; FAIL=$((FAIL + 1)); } \
         || echo "  [PASS] Normal çıkan worker yeniden başlatılmadı"
     ! kill -0 "$W1" 2>/dev/null \
         && echo "  [PASS] Zombie süreç kalmadı" \
         || { echo "  [FAIL] Worker reap edilmedi"; FAIL=$((FAIL + 1)); }
+
+    kill -USR1 "$WD_PID"
+    sleep 1
+    check "Worker #1 | PID: N/A | STATUS: STOPPED | Restart Count: 0/3" "Worker #1 STOPPED durumu loglandı"
+    stop_wd
+
+    start_wd "exit_ok"
+    sleep 3
+    check "Worker #1 exited normally with exit code 0 | PID: $W1" "Normal çıkış (exit_ok modu) tespit edildi"
+    grep -q "Restarting Worker" "$LOG" \
+        && { echo "  [FAIL] exit_ok sonrası beklenmeyen restart yapıldı"; FAIL=$((FAIL + 1)); } \
+        || echo "  [PASS] exit_ok sonrası restart yapılmadı"
     stop_wd
 }
 
@@ -73,15 +109,31 @@ test_3() {
     start_wd
     TARGET="$W2"
     for i in 1 2 3; do
-        kill -0 "$TARGET" 2>/dev/null && kill -KILL "$TARGET"
+        if verify_worker_pid "$TARGET"; then
+            kill -KILL "$TARGET"
+        fi
         sleep 1
         check "Restarting Worker #2 | Attempt: $i/3" "Restart $i/3 tetiklendi"
         TARGET=$(grep "Worker #2 restarted successfully | New PID:" "$LOG" | tail -n 1 | awk '{print $NF}')
     done
 
-    kill -0 "$TARGET" 2>/dev/null && kill -KILL "$TARGET"
+    if verify_worker_pid "$TARGET"; then
+        kill -KILL "$TARGET"
+    fi
     sleep 1
     check "Worker #2 reached maximum restart limit (3)." "Maksimum restart limiti uygulandı"
+
+    RESTART_COUNT=$(grep -c "Restarting Worker #2" "$LOG" || true)
+    if [ "$RESTART_COUNT" -eq 3 ]; then
+        echo "  [PASS] 4. restart yapılmadı (toplam restart: $RESTART_COUNT)"
+    else
+        echo "  [FAIL] Beklenen restart sayısı 3, bulunan: $RESTART_COUNT"
+        FAIL=$((FAIL + 1))
+    fi
+
+    kill -USR1 "$WD_PID"
+    sleep 1
+    check "Worker #2 | PID: N/A | STATUS: FAILED | Restart Count: 3/3" "Worker #2 FAILED durumu loglandı"
     stop_wd
 }
 
@@ -125,6 +177,10 @@ test_6() {
     start_wd "ignore_sigterm"
     stop_wd TERM
     check "did not stop after SIGTERM. Sending SIGKILL" "Timeout sonrası SIGKILL gönderildi"
+    check "terminated and reaped" "SIGKILL sonrası worker reap edildi"
+    ! kill -0 "$W1" 2>/dev/null && ! kill -0 "$W2" 2>/dev/null \
+        && echo "  [PASS] SIGKILL sonrası yetim worker kalmadı" \
+        || { echo "  [FAIL] SIGKILL sonrası çalışan worker kaldı"; FAIL=$((FAIL + 1)); }
 }
 
 # 7) Periyodik kontrol (SIGALRM / setitimer) ve log formatı

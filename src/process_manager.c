@@ -10,12 +10,23 @@
 #include <errno.h>
 #include <string.h>
 #include <fcntl.h>
+#include <sys/time.h>
 #include <time.h>
 
 #define SHUTDOWN_TIMEOUT 5
+#define SHUTDOWN_POLL_NS 100000000L /* 100 ms */
+#define SHUTDOWN_MAX_POLLS (SHUTDOWN_TIMEOUT * 10)
 
 static Worker *workers = NULL;
 static int shutting_down = 0;
+
+static int set_cloexec(int fd) {
+    int flags = fcntl(fd, F_GETFD);
+    if (flags == -1) {
+        return -1;
+    }
+    return fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
+}
 
 pid_t create_worker(void) {
 
@@ -32,9 +43,8 @@ pid_t create_worker(void) {
         return -1;
     }
 
-    int flags = fcntl(error_pipe[1], F_GETFD);
-    if (flags == -1 ||
-        fcntl(error_pipe[1], F_SETFD, flags | FD_CLOEXEC) == -1) {
+    if (set_cloexec(error_pipe[0]) == -1 ||
+        set_cloexec(error_pipe[1]) == -1) {
         int error_code = errno;
 
         close(error_pipe[0]);
@@ -107,6 +117,10 @@ pid_t create_worker(void) {
         do {
             result = waitpid(pid, &status, 0);
         } while (result == -1 && errno == EINTR);
+
+        if (bytes_read != (ssize_t)sizeof(exec_error)) {
+            exec_error = EIO;
+        }
 
         char message[150];
         snprintf(message, sizeof(message),
@@ -493,7 +507,36 @@ void periodic_check_workers(void) {
                  running_count, WORKER_COUNT);
         log_message("INFO", summary);
     }
-    
+}
+
+int start_periodic_timer(unsigned int interval_seconds) {
+
+    struct itimerval timer = {0};
+    timer.it_value.tv_sec = (time_t)interval_seconds;
+    timer.it_interval.tv_sec = (time_t)interval_seconds;
+
+    if (setitimer(ITIMER_REAL, &timer, NULL) == -1) {
+        perror("[ERROR] setitimer");
+        log_message("ERROR", "Failed to start periodic timer.");
+        return -1;
+    }
+
+    log_message("INFO", "Periodic child monitoring started.");
+    return 0;
+}
+
+int stop_periodic_timer(void) {
+
+    struct itimerval stop_timer = {0};
+
+    if (setitimer(ITIMER_REAL, &stop_timer, NULL) == -1) {
+        perror("[ERROR] setitimer stop");
+        log_message("ERROR", "Failed to stop periodic timer.");
+        return -1;
+    }
+
+    log_message("INFO", "Periodic child monitoring stopped.");
+    return 0;
 }
 
 void stop_workers(void) {
@@ -538,7 +581,7 @@ void stop_workers(void) {
         }
     }
 
-    for (int attempt = 0; attempt <= SHUTDOWN_TIMEOUT; attempt++) {
+    for (int attempt = 0; attempt <= SHUTDOWN_MAX_POLLS; attempt++) {
 
         int running_workers = 0;
 
@@ -596,10 +639,10 @@ void stop_workers(void) {
             }
         }
 
-        if (running_workers == 0 || attempt == SHUTDOWN_TIMEOUT) {
+        if (running_workers == 0 || attempt == SHUTDOWN_MAX_POLLS) {
             break;
         }
-        struct timespec req = {1, 0};
+        struct timespec req = {0, SHUTDOWN_POLL_NS};
         struct timespec rem = {0, 0};
         while (nanosleep(&req, &rem) == -1 && errno == EINTR) {
             req = rem;
@@ -639,7 +682,7 @@ void stop_workers(void) {
         int status;
         pid_t result;
 
-        if (kill_result == 0) {
+        if (kill_result == 0 || kill_error == ESRCH) {
 
             do {
                 result = waitpid(worker_pid, &status, 0);
@@ -763,26 +806,26 @@ void print_worker_status(void) {
                 break;
         }
 
-        printf("Worker #%d | PID: %d | STATUS: %s\n",
-               i + 1,
-               workers[i].pid,
-               status);
+        if (workers[i].pid > 0) {
+            printf("Worker #%d | PID: %d | STATUS: %s\n",
+                   i + 1,
+                   (int)workers[i].pid,
+                   status);
+        } else {
+            printf("Worker #%d | PID: N/A | STATUS: %s\n",
+                   i + 1,
+                   status);
+        }
 
         printf("           Restart Count: %d/%d\n",
                workers[i].restart_count,
                MAX_RESTARTS);
 
-        char message[200];
-
-        snprintf(message, sizeof(message),
-                 "Worker #%d | PID: %d | STATUS: %s | Restart Count: %d/%d",
-                 i + 1,
-                 workers[i].pid,
-                 status,
-                 workers[i].restart_count,
-                 MAX_RESTARTS);
-
-        log_message("INFO", message);
+        log_worker_status(i + 1,
+                          workers[i].pid,
+                          status,
+                          workers[i].restart_count,
+                          MAX_RESTARTS);
     }
 
     printf("\n==================================================\n\n");

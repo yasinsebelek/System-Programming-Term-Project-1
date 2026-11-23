@@ -37,32 +37,36 @@ int setup_signal_handlers(void) {
     struct sigaction signal_action = {0};
 
     sigemptyset(&signal_action.sa_mask);
-    signal_action.sa_flags = SA_RESTART;
 
+    signal_action.sa_flags = SA_RESTART | SA_NOCLDSTOP;
     signal_action.sa_handler = handle_sigchld;
     if (sigaction(SIGCHLD, &signal_action, NULL) == -1) {
         perror("sigaction SIGCHLD");
         return -1;
     }
 
+    signal_action.sa_flags = 0;
     signal_action.sa_handler = handle_sigint;
     if (sigaction(SIGINT, &signal_action, NULL) == -1) {
         perror("sigaction SIGINT");
         return -1;
     }
 
+    signal_action.sa_flags = 0;
     signal_action.sa_handler = handle_sigterm;
     if (sigaction(SIGTERM, &signal_action, NULL) == -1) {
         perror("sigaction SIGTERM");
         return -1;
     }
 
+    signal_action.sa_flags = SA_RESTART;
     signal_action.sa_handler = handle_sigusr1;
     if (sigaction(SIGUSR1, &signal_action, NULL) == -1) {
         perror("sigaction SIGUSR1");
         return -1;
     }
 
+    signal_action.sa_flags = SA_RESTART;
     signal_action.sa_handler = handle_sigalrm;
     if (sigaction(SIGALRM, &signal_action, NULL) == -1) {
         perror("sigaction SIGALRM");

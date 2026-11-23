@@ -56,29 +56,31 @@ int main(void) {
     if (mode != NULL && strcmp(mode, "exit_ok") == 0) {
         struct timespec ts = {2, 0};
         nanosleep(&ts, NULL);
-        printf("[WORKER %d] Completed normally (exit 0).\n", pid);
-        fflush(stdout);
-        return EXIT_SUCCESS;
-    }
-
-    if (mode != NULL && strcmp(mode, "exit_err") == 0) {
+        if (!terminate_requested) {
+            printf("[WORKER %d] Completed normally (exit 0).\n", pid);
+            fflush(stdout);
+            return EXIT_SUCCESS;
+        }
+    } else if (mode != NULL && strcmp(mode, "exit_err") == 0) {
         struct timespec ts = {2, 0};
         nanosleep(&ts, NULL);
-        printf("[WORKER %d] Encountered error (exit 1).\n", pid);
-        fflush(stdout);
-        return EXIT_FAILURE;
-    }
-
-    while (!terminate_requested && !normal_exit_requested) {
-        struct timespec ts = {3, 0};
-        nanosleep(&ts, NULL);
-
-        if (terminate_requested || normal_exit_requested) {
-            break;
+        if (!terminate_requested) {
+            printf("[WORKER %d] Encountered error (exit 1).\n", pid);
+            fflush(stdout);
+            return EXIT_FAILURE;
         }
+    } else {
+        while (!terminate_requested && !normal_exit_requested) {
+            struct timespec ts = {3, 0};
+            nanosleep(&ts, NULL);
 
-        printf("[WORKER %d] STATUS: RUNNING\n", pid);
-        fflush(stdout);
+            if (terminate_requested || normal_exit_requested) {
+                break;
+            }
+
+            printf("[WORKER %d] STATUS: RUNNING\n", pid);
+            fflush(stdout);
+        }
     }
 
     if (terminate_requested) {
@@ -88,8 +90,8 @@ int main(void) {
         sigaction(SIGTERM, &sa, NULL);
         raise(SIGTERM);
     }
+
     printf("[WORKER %d] Completed work normally (exit 0).\n", pid);
     fflush(stdout);
     return EXIT_SUCCESS;
-    
 }

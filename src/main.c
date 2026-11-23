@@ -5,8 +5,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <sys/time.h>
 #include <time.h>
+
+#define PERIODIC_CHECK_INTERVAL 5
 
 int main(void) {
 
@@ -30,7 +31,7 @@ int main(void) {
     char startup_message[100];
 
     snprintf(startup_message, sizeof(startup_message),
-             "Watchdog started | PID: %d", watchdog_pid);
+             "Watchdog started | PID: %d", (int)watchdog_pid);
 
     printf("[INFO] %s\n", startup_message);
     printf("[INFO] Initializing workers...\n\n");
@@ -50,29 +51,21 @@ int main(void) {
         return EXIT_FAILURE;
     }
 
-    struct itimerval timer = {0};
+    int timer_started = 0;
 
-    timer.it_value.tv_sec = 5;
-    timer.it_interval.tv_sec = 5;
+    if (!shutdown_requested) {
+        if (start_periodic_timer(PERIODIC_CHECK_INTERVAL) == -1) {
+            stop_workers();
+            close_logger();
+            return EXIT_FAILURE;
+        }
+        timer_started = 1;
 
-    if (setitimer(ITIMER_REAL, &timer, NULL) == -1) {
-
-        perror("setitimer");
-
-        log_message("ERROR", "Failed to start periodic timer.");
-
-        stop_workers();
-        close_logger();
-
-        return EXIT_FAILURE;
+        printf("\n");
+        printf("==================================================\n");
+        printf("              WATCHDOG IS RUNNING                 \n");
+        printf("==================================================\n\n");
     }
-
-    log_message("INFO", "Periodic child monitoring started.");
-
-    printf("\n");
-    printf("==================================================\n");
-    printf("              WATCHDOG IS RUNNING                 \n");
-    printf("==================================================\n\n");
 
     while (!shutdown_requested) {
 
@@ -95,14 +88,9 @@ int main(void) {
         nanosleep(&ts, NULL);
     }
 
-    struct itimerval stop_timer = {0};
-
-    if (setitimer(ITIMER_REAL, &stop_timer, NULL) == -1) {
-        perror("setitimer stop");
-        log_message("ERROR", "Failed to stop periodic timer.");
+    if (timer_started) {
+        stop_periodic_timer();
     }
-
-    log_message("INFO", "Periodic child monitoring stopped.");
 
     printf("\n");
     printf("==================================================\n");
