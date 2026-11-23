@@ -1,18 +1,16 @@
-[2026-11-22 22:15:56] [INFO] Watchdog started | PID: 7228
-[2026-11-22 22:15:56] [INFO] Initializing workers...
-[2026-11-22 22:15:56] [INFO] Child process created | PID: 7230
-[2026-11-22 22:15:56] [INFO] Child process created | PID: 7231
-[2026-11-22 22:15:56] [SUCCESS] All workers initialized successfully.
-[2026-11-22 22:15:56] [INFO] Periodic child monitoring started.
-[2026-11-22 22:15:57] [INFO] Worker status requested.
-[2026-11-22 22:15:57] [INFO] Worker #1 | PID: 7230 | STATUS: RUNNING | Restart Count: 0/3
-[2026-11-22 22:15:57] [INFO] Worker #2 | PID: 7231 | STATUS: RUNNING | Restart Count: 0/3
-[2026-11-22 22:15:58] [INFO] Periodic child monitoring stopped.
-[2026-11-22 22:15:58] [INFO] Watchdog shutdown started.
-[2026-11-22 22:15:58] [INFO] Stopping all workers.
-[2026-11-22 22:15:58] [INFO] Sending SIGTERM to Worker #1 | PID: 7230
-[2026-11-22 22:15:58] [INFO] Sending SIGTERM to Worker #2 | PID: 7231
-[2026-11-22 22:15:58] [SUCCESS] Worker #1 stopped gracefully | PID: 7230
-[2026-11-22 22:15:58] [SUCCESS] Worker #2 stopped gracefully | PID: 7231
-[2026-11-22 22:15:58] [SUCCESS] All workers have been stopped.
-[2026-11-22 22:15:58] [SUCCESS] Watchdog shutdown completed.
+[2026-11-23 14:59:17] [INFO] Watchdog started | PID: 8280
+[2026-11-23 14:59:17] [INFO] Initializing workers...
+[2026-11-23 14:59:17] [INFO] Child process created | PID: 8282
+[2026-11-23 14:59:17] [INFO] Child process created | PID: 8283
+[2026-11-23 14:59:17] [SUCCESS] All workers initialized successfully.
+[2026-11-23 14:59:17] [INFO] Periodic child monitoring started.
+[2026-11-23 14:59:22] [INFO] Periodic check completed | Running workers: 2/2
+[2026-11-23 14:59:24] [INFO] Periodic child monitoring stopped.
+[2026-11-23 14:59:24] [INFO] Watchdog shutdown started.
+[2026-11-23 14:59:24] [INFO] Stopping all workers.
+[2026-11-23 14:59:24] [INFO] Sending SIGTERM to Worker #1 | PID: 8282
+[2026-11-23 14:59:24] [INFO] Sending SIGTERM to Worker #2 | PID: 8283
+[2026-11-23 14:59:25] [SUCCESS] Worker #1 stopped gracefully | PID: 8282
+[2026-11-23 14:59:25] [SUCCESS] Worker #2 stopped gracefully | PID: 8283
+[2026-11-23 14:59:25] [SUCCESS] All workers have been stopped.
+[2026-11-23 14:59:25] [SUCCESS] Watchdog shutdown completed.
