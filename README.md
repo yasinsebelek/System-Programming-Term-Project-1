@@ -268,6 +268,6 @@ Logs are written to `logs/watchdog_YYYY-MM-DD.log` (rotated automatically when e
 
 | Student | GitHub | Assigned Module | Primary Files |
 | :--- | :--- | :--- | :--- |
-| Student 1 Name | `@username1` | Signal Management & Main Program (`sigaction`, `SIGINT`/`SIGTERM`/`SIGUSR1`, main loop, graceful shutdown) | `include/signal_manager.h`, `src/signal_manager.c`, `src/main.c` |
-| Student 2 Name | `@username2` | Child Process Management (`fork`/`execl`, `SIGCHLD`/`waitpid`, bounded restarts, `SIGALRM`/`setitimer`) | `include/process_manager.h`, `src/process_manager.c`, `workers/worker.c` |
-| Student 3 Name | `@username3` | Logging, Build & Test Infrastructure (logger, `SIGUSR1` reporting, test suite, `Makefile`, docs) | `include/logger.h`, `src/logger.c`, `tests/test_scenarios.sh`, `Makefile`, `README.md` |
+| Student 1 Name | `Yasin Şebelek` | Signal Management & Main Program (`sigaction`, `SIGINT`/`SIGTERM`/`SIGUSR1`, main loop, graceful shutdown) | `include/signal_manager.h`, `src/signal_manager.c`, `src/main.c` |
+| Student 2 Name | `Yasin Şebelek` | Child Process Management (`fork`/`execl`, `SIGCHLD`/`waitpid`, bounded restarts, `SIGALRM`/`setitimer`) | `include/process_manager.h`, `src/process_manager.c`, `workers/worker.c` |
+| Student 3 Name | `Yasin Şebelek` | Logging, Build & Test Infrastructure (logger, `SIGUSR1` reporting, test suite, `Makefile`, docs) | `include/logger.h`, `src/logger.c`, `tests/test_scenarios.sh`, `Makefile`, `README.md` |
